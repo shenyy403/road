@@ -67,6 +67,37 @@ function getWeekKey(date = new Date()) {
     return `${year}-W${String(week).padStart(2, '0')}`;
 }
 
+// ============ 获取本周一到周五的日期（基于今天） ============
+function getWeekDatesFromToday() {
+    const today = new Date();
+    const todayDay = today.getDay(); // 0=周日, 1=周一, ..., 6=周六
+    
+    // 计算本周一
+    let daysToMonday;
+    if (todayDay === 0) {
+        // 周日：本周一是6天前
+        daysToMonday = 6;
+    } else {
+        // 周一到周六：本周一是 (todayDay - 1) 天前
+        daysToMonday = todayDay - 1;
+    }
+    
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - daysToMonday);
+    
+    // 生成周一到周五
+    const dates = [];
+    for (let i = 0; i < 5; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const yearStr = d.getFullYear();
+        const monthStr = String(d.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(d.getDate()).padStart(2, '0');
+        dates.push(`${yearStr}-${monthStr}-${dayStr}`);
+    }
+    return dates;
+}
+
 function getTodayChina() {
     const now = new Date();
     const year = now.getFullYear();
@@ -344,7 +375,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
         return res.status(400).json({ error: '缺少必要参数' });
     }
 
-    const dates = getWeekDates(weekKey);
+    const dates = getWeekDatesFromToday();
     
     db.get('SELECT COUNT(*) as count FROM draw_records WHERE week_key = ?', [weekKey], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
