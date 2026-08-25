@@ -35,16 +35,17 @@ db.serialize(() => {
     )
   `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS resources (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      type_label TEXT NOT NULL,
-      responsible TEXT NOT NULL,
-      area TEXT
-    )
-  `);
+db.run(`
+  CREATE TABLE IF NOT EXISTS resources (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    type_label TEXT NOT NULL,
+    responsible TEXT NOT NULL,
+    area TEXT,
+    camera TEXT
+  )
+`);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS draw_records (
@@ -149,79 +150,91 @@ db.serialize(() => {
 
 function initDefaultResources() {
   const resources = [
-    { id: 'R1', name: '凌川桥桥南头00142', type: 'road', type_label: '路段', responsible: '韩江' },
-    { id: 'R2', name: '锦兴路-成都街-五期', type: 'road', type_label: '路段', responsible: '关鑫' },
-    { id: 'R3', name: '松坡路3段-24号楼-四期', type: 'road', type_label: '路段', responsible: '王鑫' },
-    { id: 'R4', name: '松坡路-东北五金城-一期', type: 'road', type_label: '路段', responsible: '王鼎群' },
-    { id: 'R5', name: '胜昔路士英南街00176', type: 'road', type_label: '路段', responsible: '付彧' },
-    { id: 'R6', name: '南街所门前路边往南照—YD2', type: 'road', type_label: '路段', responsible: '田丰' },
-    { id: 'R7', name: '凌西大街南郡天下00313', type: 'road', type_label: '路段', responsible: '刘添睿' },
-    { id: 'R8', name: '凌西大街太平街00204', type: 'road', type_label: '路段', responsible: '刘嘉伦' },
-    { id: 'R9', name: '和平路中央街00239', type: 'road', type_label: '路段', responsible: '关丽丽' },
-    { id: 'R10', name: '中央街洛阳路00333', type: 'road', type_label: '路段', responsible: '孙昱' },
-    { id: 'R11', name: '绕城公路金峰轮胎厂路口00710', type: 'road', type_label: '路段', responsible: '毕世伟' },
-    { id: 'R12', name: '绕城公路西宁街', type: 'road', type_label: '路段', responsible: '李松' },
-    { id: 'R13', name: '重庆路爱民街00348', type: 'road', type_label: '路段', responsible: '肖阳' },
-    { id: 'R14', name: '辽沈战役纪念馆外墙东北角—YD4', type: 'road', type_label: '路段', responsible: '李佳' },
-    { id: 'R15', name: '士英街北京路东南00357', type: 'road', type_label: '路段', responsible: '杨子晴' },
-    { id: 'R16', name: '士英街金缘路0054', type: 'road', type_label: '路段', responsible: '佟璘' },
-    { id: 'R17', name: '渤海大道南山隧道00265', type: 'road', type_label: '路段', responsible: '张健' },
-    { id: 'R18', name: '南山隧道北00566', type: 'road', type_label: '路段', responsible: '吴达' },
-    { id: 'R19', name: '市府路长沙街00359', type: 'road', type_label: '路段', responsible: '吴达' },
-    { id: 'R20', name: '市府路云飞街西侧', type: 'road', type_label: '路段', responsible: '吴达' },
-    { id: 'R21', name: '解放路汉口街00138', type: 'road', type_label: '路段', responsible: '金晓宇' },
-    { id: 'R22', name: '西桥西侧引桥00225', type: 'road', type_label: '路段', responsible: '赵一雯' },
-    { id: 'R23', name: '科技路云飞街西00420', type: 'road', type_label: '路段', responsible: '徐嘉璐' },
-    { id: 'R24', name: '科技路吉祥街00247', type: 'road', type_label: '路段', responsible: '郭翔宇' },
-    { id: 'R25', name: '北湖公园西门00387', type: 'road', type_label: '路段', responsible: '姬鹏' },
-    { id: 'R26', name: '农经校门前—四期', type: 'road', type_label: '路段', responsible: '文雷' },
-    { id: 'R27', name: '北京路吴淞街00167', type: 'road', type_label: '路段', responsible: '才多' },
-    { id: 'R28', name: '北京路汉口街00183', type: 'road', type_label: '路段', responsible: '石晓婷' },
-    { id: 'R29', name: '联通公司北门-七期', type: 'road', type_label: '路段', responsible: '石晓婷' },
-    { id: 'R30', name: '兴隆北侧税务局东南角—YD4', type: 'road', type_label: '路段', responsible: '石晓婷' },
-    { id: 'R31', name: '东方庭院-东门-五期', type: 'road', type_label: '路段', responsible: '韩江' },
-    { id: 'R32', name: '市府路-昆明街-六期', type: 'road', type_label: '路段', responsible: '关鑫' },
-    { id: 'R33', name: '南宁路山西街173', type: 'road', type_label: '路段', responsible: '王鑫' },
-    { id: 'R34', name: '解放路-山西街西南角—YD4', type: 'road', type_label: '路段', responsible: '王鼎群' },
-    { id: 'R35', name: '实华园小区-北门-四期', type: 'road', type_label: '路段', responsible: '付彧' },
-    { id: 'R36', name: '重庆路新制街00369', type: 'road', type_label: '路段', responsible: '田丰' },
-    { id: 'C1', name: '锦兴路成都街00151', type: 'cross', type_label: '路口', responsible: '韩江' },
-    { id: 'C2', name: '成都街与锦兴路交叉口卡口—YD2', type: 'cross', type_label: '路口', responsible: '关鑫' },
-    { id: 'C3', name: '解放路士英街00102', type: 'cross', type_label: '路口', responsible: '王鑫' },
-    { id: 'C4', name: '解放路士英街东侧', type: 'cross', type_label: '路口', responsible: '王鼎群' },
-    { id: 'C5', name: '市府路云飞南街南0010', type: 'cross', type_label: '路口', responsible: '付彧' },
-    { id: 'C6', name: '云飞南街-市府路北侧西-五期', type: 'cross', type_label: '路口', responsible: '田丰' },
-    { id: 'C7', name: '市府路中央南街东00242', type: 'cross', type_label: '路口', responsible: '刘添睿' },
-    { id: 'C8', name: '中央南街市府路南00251', type: 'cross', type_label: '路口', responsible: '刘嘉伦' },
-    { id: 'C9', name: '解放路-锦华街-五期', type: 'cross', type_label: '路口', responsible: '关丽丽' },
-    { id: 'C10', name: '锦华街-解放路东侧—YD4', type: 'cross', type_label: '路口', responsible: '孙昱' },
-    { id: 'C11', name: '中央街南京路00341', type: 'cross', type_label: '路口', responsible: '毕世伟' },
-    { id: 'C12', name: '中央大街南京路交叉口（凌安）—YD1', type: 'cross', type_label: '路口', responsible: '李松' },
-    { id: 'C13', name: '科技路中央南街南侧', type: 'cross', type_label: '路口', responsible: '肖阳' },
-    { id: 'C14', name: '科技路中央南街西侧', type: 'cross', type_label: '路口', responsible: '李佳' },
-    { id: 'C15', name: '中央大街与洛阳路交叉口东—YD2', type: 'cross', type_label: '路口', responsible: '杨子晴' },
-    { id: 'C16', name: '中央大街洛阳路西侧', type: 'cross', type_label: '路口', responsible: '佟璘' },
-    { id: 'C17', name: '延安路云飞街00185', type: 'cross', type_label: '路口', responsible: '张健' },
-    { id: 'C18', name: '延安路-云飞街-一期', type: 'cross', type_label: '路口', responsible: '金晓宇' },
-    { id: 'C19', name: '金厦酒店-门前-五期', type: 'cross', type_label: '路口', responsible: '赵一雯' },
-    { id: 'C20', name: '解放路人民街00292', type: 'cross', type_label: '路口', responsible: '徐嘉璐' },
-    { id: 'C21', name: '解放路中央街0052', type: 'cross', type_label: '路口', responsible: '郭翔宇' },
-    { id: 'C22', name: '解放路中央大街东侧', type: 'cross', type_label: '路口', responsible: '姬鹏' },
-    { id: 'C23', name: '上海路徐州街0099', type: 'cross', type_label: '路口', responsible: '文雷' },
-    { id: 'C24', name: '上海路徐州街路口—YD4', type: 'cross', type_label: '路口', responsible: '才多' },
-    { id: 'C25', name: '中央大街上海路0046', type: 'cross', type_label: '路口', responsible: '韩江' },
-    { id: 'C26', name: '上海路与中央大街交叉口东-二期', type: 'cross', type_label: '路口', responsible: '关鑫' },
-    { id: 'C27', name: '解放路徐州街00384', type: 'cross', type_label: '路口', responsible: '王鑫' },
-    { id: 'C28', name: '解放路-矿山街-二期', type: 'cross', type_label: '路口', responsible: '王鼎群' },
-    { id: 'C29', name: '延安路人民街0016', type: 'cross', type_label: '路口', responsible: '付彧' },
-    { id: 'C30', name: '延安路人民街西侧', type: 'cross', type_label: '路口', responsible: '田丰' },
-    { id: 'C31', name: '云飞街洛阳路37', type: 'cross', type_label: '路口', responsible: '刘添睿' },
-    { id: 'C32', name: '洛阳路-云飞街-一期', type: 'cross', type_label: '路口', responsible: '刘嘉伦' },
-    { id: 'C33', name: '解放路云飞街东侧', type: 'cross', type_label: '路口', responsible: '关丽丽' },
-    { id: 'C34', name: '解放路云飞街北侧', type: 'cross', type_label: '路口', responsible: '孙昱' }
+    // ===== 路段 (R1~R36) =====
+    { id: 'R1', name: '凌川桥桥南头00142', type: 'road', type_label: '路段', responsible: '韩江', area: '', camera: '' },
+    { id: 'R2', name: '锦兴路-成都街-五期', type: 'road', type_label: '路段', responsible: '关鑫', area: '', camera: '' },
+    { id: 'R3', name: '松坡路3段-24号楼-四期', type: 'road', type_label: '路段', responsible: '王鑫', area: '', camera: '' },
+    { id: 'R4', name: '松坡路-东北五金城-一期', type: 'road', type_label: '路段', responsible: '王鼎群', area: '', camera: '' },
+    { id: 'R5', name: '胜昔路士英南街00176', type: 'road', type_label: '路段', responsible: '付彧', area: '', camera: '' },
+    { id: 'R6', name: '南街所门前路边往南照—YD2', type: 'road', type_label: '路段', responsible: '田丰', area: '', camera: '' },
+    { id: 'R7', name: '凌西大街南郡天下00313', type: 'road', type_label: '路段', responsible: '刘添睿', area: '', camera: '' },
+    { id: 'R8', name: '凌西大街太平街00204', type: 'road', type_label: '路段', responsible: '刘嘉伦', area: '', camera: '' },
+    { id: 'R9', name: '和平路中央街00239', type: 'road', type_label: '路段', responsible: '关丽丽', area: '', camera: '' },
+    { id: 'R10', name: '中央街洛阳路00333', type: 'road', type_label: '路段', responsible: '孙昱', area: '', camera: '' },
+    { id: 'R11', name: '绕城公路金峰轮胎厂路口00710', type: 'road', type_label: '路段', responsible: '毕世伟', area: '', camera: '' },
+    { id: 'R12', name: '绕城公路西宁街', type: 'road', type_label: '路段', responsible: '李松', area: '', camera: '' },
+    { id: 'R13', name: '重庆路爱民街00348', type: 'road', type_label: '路段', responsible: '肖阳', area: '', camera: '' },
+    { id: 'R14', name: '辽沈战役纪念馆外墙东北角—YD4', type: 'road', type_label: '路段', responsible: '李佳', area: '', camera: '' },
+    { id: 'R15', name: '士英街北京路东南00357', type: 'road', type_label: '路段', responsible: '杨子晴', area: '', camera: '' },
+    { id: 'R16', name: '士英街金缘路0054', type: 'road', type_label: '路段', responsible: '佟璘', area: '', camera: '' },
+    { id: 'R17', name: '渤海大道南山隧道00265', type: 'road', type_label: '路段', responsible: '张健', area: '', camera: '' },
+    { id: 'R18', name: '南山隧道北00566', type: 'road', type_label: '路段', responsible: '吴达', area: '', camera: '' },
+    { id: 'R19', name: '市府路长沙街00359', type: 'road', type_label: '路段', responsible: '吴达', area: '', camera: '' },
+    { id: 'R20', name: '市府路云飞街西侧', type: 'road', type_label: '路段', responsible: '吴达', area: '', camera: '' },
+    { id: 'R21', name: '解放路汉口街00138', type: 'road', type_label: '路段', responsible: '金晓宇', area: '', camera: '' },
+    { id: 'R22', name: '西桥西侧引桥00225', type: 'road', type_label: '路段', responsible: '赵一雯', area: '', camera: '' },
+    { id: 'R23', name: '科技路云飞街西00420', type: 'road', type_label: '路段', responsible: '徐嘉璐', area: '', camera: '' },
+    { id: 'R24', name: '科技路吉祥街00247', type: 'road', type_label: '路段', responsible: '郭翔宇', area: '', camera: '' },
+    { id: 'R25', name: '北湖公园西门00387', type: 'road', type_label: '路段', responsible: '姬鹏', area: '', camera: '' },
+    { id: 'R26', name: '农经校门前—四期', type: 'road', type_label: '路段', responsible: '文雷', area: '', camera: '' },
+    { id: 'R27', name: '北京路吴淞街00167', type: 'road', type_label: '路段', responsible: '才多', area: '', camera: '' },
+    { id: 'R28', name: '北京路汉口街00183', type: 'road', type_label: '路段', responsible: '石晓婷', area: '', camera: '' },
+    { id: 'R29', name: '联通公司北门-七期', type: 'road', type_label: '路段', responsible: '石晓婷', area: '', camera: '' },
+    { id: 'R30', name: '兴隆北侧税务局东南角—YD4', type: 'road', type_label: '路段', responsible: '石晓婷', area: '', camera: '' },
+    { id: 'R31', name: '东方庭院-东门-五期', type: 'road', type_label: '路段', responsible: '韩江', area: '', camera: '' },
+    { id: 'R32', name: '市府路-昆明街-六期', type: 'road', type_label: '路段', responsible: '关鑫', area: '', camera: '' },
+    { id: 'R33', name: '南宁路山西街173', type: 'road', type_label: '路段', responsible: '王鑫', area: '', camera: '' },
+    { id: 'R34', name: '解放路-山西街西南角—YD4', type: 'road', type_label: '路段', responsible: '王鼎群', area: '', camera: '' },
+    { id: 'R35', name: '实华园小区-北门-四期', type: 'road', type_label: '路段', responsible: '付彧', area: '', camera: '' },
+    { id: 'R36', name: '重庆路新制街00369', type: 'road', type_label: '路段', responsible: '田丰', area: '', camera: '' },
+
+    // ===== 路口 (C1~C34) =====
+    { id: 'C1', name: '锦兴路成都街00151', type: 'cross', type_label: '路口', responsible: '韩江', area: '', camera: '' },
+    { id: 'C2', name: '成都街与锦兴路交叉口卡口—YD2', type: 'cross', type_label: '路口', responsible: '关鑫', area: '', camera: '' },
+    { id: 'C3', name: '解放路士英街00102', type: 'cross', type_label: '路口', responsible: '王鑫', area: '', camera: '' },
+    { id: 'C4', name: '解放路士英街东侧', type: 'cross', type_label: '路口', responsible: '王鼎群', area: '', camera: '' },
+    { id: 'C5', name: '市府路云飞南街南0010', type: 'cross', type_label: '路口', responsible: '付彧', area: '', camera: '' },
+    { id: 'C6', name: '云飞南街-市府路北侧西-五期', type: 'cross', type_label: '路口', responsible: '田丰', area: '', camera: '' },
+    { id: 'C7', name: '市府路中央南街东00242', type: 'cross', type_label: '路口', responsible: '刘添睿', area: '', camera: '' },
+    { id: 'C8', name: '中央南街市府路南00251', type: 'cross', type_label: '路口', responsible: '刘嘉伦', area: '', camera: '' },
+    { id: 'C9', name: '解放路-锦华街-五期', type: 'cross', type_label: '路口', responsible: '关丽丽', area: '', camera: '' },
+    { id: 'C10', name: '锦华街-解放路东侧—YD4', type: 'cross', type_label: '路口', responsible: '孙昱', area: '', camera: '' },
+    { id: 'C11', name: '中央街南京路00341', type: 'cross', type_label: '路口', responsible: '毕世伟', area: '', camera: '' },
+    { id: 'C12', name: '中央大街南京路交叉口（凌安）—YD1', type: 'cross', type_label: '路口', responsible: '李松', area: '', camera: '' },
+    { id: 'C13', name: '科技路中央南街南侧', type: 'cross', type_label: '路口', responsible: '肖阳', area: '', camera: '' },
+    { id: 'C14', name: '科技路中央南街西侧', type: 'cross', type_label: '路口', responsible: '李佳', area: '', camera: '' },
+    { id: 'C15', name: '中央大街与洛阳路交叉口东—YD2', type: 'cross', type_label: '路口', responsible: '杨子晴', area: '', camera: '' },
+    { id: 'C16', name: '中央大街洛阳路西侧', type: 'cross', type_label: '路口', responsible: '佟璘', area: '', camera: '' },
+    { id: 'C17', name: '延安路云飞街00185', type: 'cross', type_label: '路口', responsible: '张健', area: '', camera: '' },
+    { id: 'C18', name: '延安路-云飞街-一期', type: 'cross', type_label: '路口', responsible: '金晓宇', area: '', camera: '' },
+    { id: 'C19', name: '金厦酒店-门前-五期', type: 'cross', type_label: '路口', responsible: '赵一雯', area: '', camera: '' },
+    { id: 'C20', name: '解放路人民街00292', type: 'cross', type_label: '路口', responsible: '徐嘉璐', area: '', camera: '' },
+    { id: 'C21', name: '解放路中央街0052', type: 'cross', type_label: '路口', responsible: '郭翔宇', area: '', camera: '' },
+    { id: 'C22', name: '解放路中央大街东侧', type: 'cross', type_label: '路口', responsible: '姬鹏', area: '', camera: '' },
+    { id: 'C23', name: '上海路徐州街0099', type: 'cross', type_label: '路口', responsible: '文雷', area: '', camera: '' },
+    { id: 'C24', name: '上海路徐州街路口—YD4', type: 'cross', type_label: '路口', responsible: '才多', area: '', camera: '' },
+    { id: 'C25', name: '中央大街上海路0046', type: 'cross', type_label: '路口', responsible: '韩江', area: '', camera: '' },
+    { id: 'C26', name: '上海路与中央大街交叉口东-二期', type: 'cross', type_label: '路口', responsible: '关鑫', area: '', camera: '' },
+    { id: 'C27', name: '解放路徐州街00384', type: 'cross', type_label: '路口', responsible: '王鑫', area: '', camera: '' },
+    { id: 'C28', name: '解放路-矿山街-二期', type: 'cross', type_label: '路口', responsible: '王鼎群', area: '', camera: '' },
+    { id: 'C29', name: '延安路人民街0016', type: 'cross', type_label: '路口', responsible: '付彧', area: '', camera: '' },
+    { id: 'C30', name: '延安路人民街西侧', type: 'cross', type_label: '路口', responsible: '田丰', area: '', camera: '' },
+    { id: 'C31', name: '云飞街洛阳路37', type: 'cross', type_label: '路口', responsible: '刘添睿', area: '', camera: '' },
+    { id: 'C32', name: '洛阳路-云飞街-一期', type: 'cross', type_label: '路口', responsible: '刘嘉伦', area: '', camera: '' },
+    { id: 'C33', name: '解放路云飞街东侧', type: 'cross', type_label: '路口', responsible: '关丽丽', area: '', camera: '' },
+    { id: 'C34', name: '解放路云飞街北侧', type: 'cross', type_label: '路口', responsible: '孙昱', area: '', camera: '' }
   ];
 
-  const stmt = db.prepare('INSERT INTO resources (id, name, type, type_label, responsible, area) VALUES (?, ?, ?, ?, ?, ?)');
+  const stmt = db.prepare('INSERT INTO resources (id, name, type, type_label, responsible, area, camera) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  resources.forEach(r => {
+    stmt.run(r.id, r.name, r.type, r.type_label, r.responsible, r.area, r.camera);
+  });
+  stmt.finalize();
+
+  console.log(`✅ 资源初始化完成: ${resources.length} 个 (路段36个 + 路口34个)`);
+}
+
+  const stmt = db.prepare('INSERT INTO resources (id, name, type, type_label, responsible, area, camera) VALUES (?, ?, ?, ?, ?, ?, ?)');
   resources.forEach(r => {
     stmt.run(r.id, r.name, r.type, r.type_label, r.responsible, '');
   });
