@@ -1,0 +1,252 @@
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const fs = require('fs');
+
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir);
+}
+
+const dbPath = path.join(dataDir, 'draw.db');
+const db = new sqlite3.Database(dbPath);
+
+db.run('PRAGMA foreign_keys = ON');
+
+// ============================================================
+// 初始化所有表
+// ============================================================
+db.serialize(() => {
+  // 用户表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // 操作日志表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS operation_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      action TEXT NOT NULL,
+      details TEXT,
+      ip TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // 资源表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS resources (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      type_label TEXT NOT NULL,
+      responsible TEXT NOT NULL,
+      area TEXT
+    )
+  `);
+
+  // 抽取记录表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS draw_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      resource_id TEXT NOT NULL,
+      draw_date TEXT NOT NULL,
+      week_key TEXT NOT NULL,
+      FOREIGN KEY (resource_id) REFERENCES resources(id)
+    )
+  `);
+
+  // 测评数据表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS assessments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL CHECK(type IN ('cross', 'road')),
+      row_index INTEGER NOT NULL,
+      paixu TEXT,
+      name TEXT,
+      camera TEXT,
+      direction TEXT,
+      time_start TEXT,
+      time_end TEXT,
+      non_motor_count TEXT,
+      reverse_count TEXT,
+      red_light_count TEXT,
+      stop_line_count TEXT,
+      no_crosswalk_count TEXT,
+      other_count TEXT,
+      total TEXT,
+      compliance_rate TEXT,
+      right_turn_count TEXT,
+      no_yield_count TEXT,
+      yield_rate TEXT,
+      illegal_count TEXT,
+      evaluator TEXT NOT NULL,
+      remark TEXT,
+      non_motor_total TEXT,
+      wrong_lane_count TEXT,
+      compliance_rate_non TEXT,
+      parking_violation TEXT,
+      jaywalk_count TEXT,
+      crosswalk_total TEXT,
+      no_yield_cross TEXT,
+      compliance_rate_cross TEXT,
+      assessment_date TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ============================================================
+  // 创建用户（2个超管 + 25个普通用户）
+  // ============================================================
+  const allUsers = [
+    // 超级管理员
+    { username: '石晓婷', password: '199639', role: 'admin' },
+    { username: '白书语', password: 'Ywxtly0428', role: 'admin' },
+    // 普通用户
+    { username: '韩江', password: '123456', role: 'user' },
+    { username: '关鑫', password: '123456', role: 'user' },
+    { username: '王鑫', password: '123456', role: 'user' },
+    { username: '王鼎群', password: '123456', role: 'user' },
+    { username: '付彧', password: '123456', role: 'user' },
+    { username: '田丰', password: '123456', role: 'user' },
+    { username: '刘添睿', password: '123456', role: 'user' },
+    { username: '刘嘉伦', password: '123456', role: 'user' },
+    { username: '关丽丽', password: '123456', role: 'user' },
+    { username: '孙昱', password: '123456', role: 'user' },
+    { username: '毕世伟', password: '123456', role: 'user' },
+    { username: '李松', password: '123456', role: 'user' },
+    { username: '肖阳', password: '123456', role: 'user' },
+    { username: '李佳', password: '123456', role: 'user' },
+    { username: '杨子晴', password: '123456', role: 'user' },
+    { username: '佟璘', password: '123456', role: 'user' },
+    { username: '张健', password: '123456', role: 'user' },
+    { username: '吴达', password: '123456', role: 'user' },
+    { username: '金晓宇', password: '123456', role: 'user' },
+    { username: '赵一雯', password: '123456', role: 'user' },
+    { username: '徐嘉璐', password: '123456', role: 'user' },
+    { username: '郭翔宇', password: '123456', role: 'user' },
+    { username: '姬鹏', password: '123456', role: 'user' },
+    { username: '文雷', password: '123456', role: 'user' },
+    { username: '才多', password: '123456', role: 'user' }
+  ];
+
+  allUsers.forEach(user => {
+    db.get('SELECT * FROM users WHERE username = ?', [user.username], (err, row) => {
+      if (err) return console.error(err);
+      if (!row) {
+        db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+          [user.username, user.password, user.role]);
+        console.log(`✅ 用户已创建: ${user.username} (${user.role})`);
+      }
+    });
+  });
+
+  // ============================================================
+  // 初始化资源（路段 R1~R36 + 路口 C1~C34）
+  // ============================================================
+  db.get('SELECT COUNT(*) as count FROM resources', (err, row) => {
+    if (err) return console.error(err);
+    if (row.count === 0) {
+      console.log('📦 初始化资源数据...');
+      initDefaultResources();
+    }
+  });
+});
+
+// ============================================================
+// 资源数据
+// ============================================================
+function initDefaultResources() {
+  const resources = [
+    // ===== 路段 (R1~R36) =====
+    { id: 'R1', name: '凌川桥桥南头00142', type: 'road', type_label: '路段', responsible: '韩江' },
+    { id: 'R2', name: '锦兴路-成都街-五期', type: 'road', type_label: '路段', responsible: '关鑫' },
+    { id: 'R3', name: '松坡路3段-24号楼-四期', type: 'road', type_label: '路段', responsible: '王鑫' },
+    { id: 'R4', name: '松坡路-东北五金城-一期', type: 'road', type_label: '路段', responsible: '王鼎群' },
+    { id: 'R5', name: '胜昔路士英南街00176', type: 'road', type_label: '路段', responsible: '付彧' },
+    { id: 'R6', name: '南街所门前路边往南照—YD2', type: 'road', type_label: '路段', responsible: '田丰' },
+    { id: 'R7', name: '凌西大街南郡天下00313', type: 'road', type_label: '路段', responsible: '刘添睿' },
+    { id: 'R8', name: '凌西大街太平街00204', type: 'road', type_label: '路段', responsible: '刘嘉伦' },
+    { id: 'R9', name: '和平路中央街00239', type: 'road', type_label: '路段', responsible: '关丽丽' },
+    { id: 'R10', name: '中央街洛阳路00333', type: 'road', type_label: '路段', responsible: '孙昱' },
+    { id: 'R11', name: '绕城公路金峰轮胎厂路口00710', type: 'road', type_label: '路段', responsible: '毕世伟' },
+    { id: 'R12', name: '绕城公路西宁街', type: 'road', type_label: '路段', responsible: '李松' },
+    { id: 'R13', name: '重庆路爱民街00348', type: 'road', type_label: '路段', responsible: '肖阳' },
+    { id: 'R14', name: '辽沈战役纪念馆外墙东北角—YD4', type: 'road', type_label: '路段', responsible: '李佳' },
+    { id: 'R15', name: '士英街北京路东南00357', type: 'road', type_label: '路段', responsible: '杨子晴' },
+    { id: 'R16', name: '士英街金缘路0054', type: 'road', type_label: '路段', responsible: '佟璘' },
+    { id: 'R17', name: '渤海大道南山隧道00265', type: 'road', type_label: '路段', responsible: '张健' },
+    { id: 'R18', name: '南山隧道北00566', type: 'road', type_label: '路段', responsible: '吴达' },
+    { id: 'R19', name: '市府路长沙街00359', type: 'road', type_label: '路段', responsible: '吴达' },
+    { id: 'R20', name: '市府路云飞街西侧', type: 'road', type_label: '路段', responsible: '吴达' },
+    { id: 'R21', name: '解放路汉口街00138', type: 'road', type_label: '路段', responsible: '金晓宇' },
+    { id: 'R22', name: '西桥西侧引桥00225', type: 'road', type_label: '路段', responsible: '赵一雯' },
+    { id: 'R23', name: '科技路云飞街西00420', type: 'road', type_label: '路段', responsible: '徐嘉璐' },
+    { id: 'R24', name: '科技路吉祥街00247', type: 'road', type_label: '路段', responsible: '郭翔宇' },
+    { id: 'R25', name: '北湖公园西门00387', type: 'road', type_label: '路段', responsible: '姬鹏' },
+    { id: 'R26', name: '农经校门前—四期', type: 'road', type_label: '路段', responsible: '文雷' },
+    { id: 'R27', name: '北京路吴淞街00167', type: 'road', type_label: '路段', responsible: '才多' },
+    { id: 'R28', name: '北京路汉口街00183', type: 'road', type_label: '路段', responsible: '石晓婷' },
+    { id: 'R29', name: '联通公司北门-七期', type: 'road', type_label: '路段', responsible: '石晓婷' },
+    { id: 'R30', name: '兴隆北侧税务局东南角—YD4', type: 'road', type_label: '路段', responsible: '石晓婷' },
+    { id: 'R31', name: '东方庭院-东门-五期', type: 'road', type_label: '路段', responsible: '韩江' },
+    { id: 'R32', name: '市府路-昆明街-六期', type: 'road', type_label: '路段', responsible: '关鑫' },
+    { id: 'R33', name: '南宁路山西街173', type: 'road', type_label: '路段', responsible: '王鑫' },
+    { id: 'R34', name: '解放路-山西街西南角—YD4', type: 'road', type_label: '路段', responsible: '王鼎群' },
+    { id: 'R35', name: '实华园小区-北门-四期', type: 'road', type_label: '路段', responsible: '付彧' },
+    { id: 'R36', name: '重庆路新制街00369', type: 'road', type_label: '路段', responsible: '田丰' },
+
+    // ===== 路口 (C1~C34) =====
+    { id: 'C1', name: '锦兴路成都街00151', type: 'cross', type_label: '路口', responsible: '韩江' },
+    { id: 'C2', name: '成都街与锦兴路交叉口卡口—YD2', type: 'cross', type_label: '路口', responsible: '关鑫' },
+    { id: 'C3', name: '解放路士英街00102', type: 'cross', type_label: '路口', responsible: '王鑫' },
+    { id: 'C4', name: '解放路士英街东侧', type: 'cross', type_label: '路口', responsible: '王鼎群' },
+    { id: 'C5', name: '市府路云飞南街南0010', type: 'cross', type_label: '路口', responsible: '付彧' },
+    { id: 'C6', name: '云飞南街-市府路北侧西-五期', type: 'cross', type_label: '路口', responsible: '田丰' },
+    { id: 'C7', name: '市府路中央南街东00242', type: 'cross', type_label: '路口', responsible: '刘添睿' },
+    { id: 'C8', name: '中央南街市府路南00251', type: 'cross', type_label: '路口', responsible: '刘嘉伦' },
+    { id: 'C9', name: '解放路-锦华街-五期', type: 'cross', type_label: '路口', responsible: '关丽丽' },
+    { id: 'C10', name: '锦华街-解放路东侧—YD4', type: 'cross', type_label: '路口', responsible: '孙昱' },
+    { id: 'C11', name: '中央街南京路00341', type: 'cross', type_label: '路口', responsible: '毕世伟' },
+    { id: 'C12', name: '中央大街南京路交叉口（凌安）—YD1', type: 'cross', type_label: '路口', responsible: '李松' },
+    { id: 'C13', name: '科技路中央南街南侧', type: 'cross', type_label: '路口', responsible: '肖阳' },
+    { id: 'C14', name: '科技路中央南街西侧', type: 'cross', type_label: '路口', responsible: '李佳' },
+    { id: 'C15', name: '中央大街与洛阳路交叉口东—YD2', type: 'cross', type_label: '路口', responsible: '杨子晴' },
+    { id: 'C16', name: '中央大街洛阳路西侧', type: 'cross', type_label: '路口', responsible: '佟璘' },
+    { id: 'C17', name: '延安路云飞街00185', type: 'cross', type_label: '路口', responsible: '张健' },
+    { id: 'C18', name: '延安路-云飞街-一期', type: 'cross', type_label: '路口', responsible: '金晓宇' },
+    { id: 'C19', name: '金厦酒店-门前-五期', type: 'cross', type_label: '路口', responsible: '赵一雯' },
+    { id: 'C20', name: '解放路人民街00292', type: 'cross', type_label: '路口', responsible: '徐嘉璐' },
+    { id: 'C21', name: '解放路中央街0052', type: 'cross', type_label: '路口', responsible: '郭翔宇' },
+    { id: 'C22', name: '解放路中央大街东侧', type: 'cross', type_label: '路口', responsible: '姬鹏' },
+    { id: 'C23', name: '上海路徐州街0099', type: 'cross', type_label: '路口', responsible: '文雷' },
+    { id: 'C24', name: '上海路徐州街路口—YD4', type: 'cross', type_label: '路口', responsible: '才多' },
+    { id: 'C25', name: '中央大街上海路0046', type: 'cross', type_label: '路口', responsible: '韩江' },
+    { id: 'C26', name: '上海路与中央大街交叉口东-二期', type: 'cross', type_label: '路口', responsible: '关鑫' },
+    { id: 'C27', name: '解放路徐州街00384', type: 'cross', type_label: '路口', responsible: '王鑫' },
+    { id: 'C28', name: '解放路-矿山街-二期', type: 'cross', type_label: '路口', responsible: '王鼎群' },
+    { id: 'C29', name: '延安路人民街0016', type: 'cross', type_label: '路口', responsible: '付彧' },
+    { id: 'C30', name: '延安路人民街西侧', type: 'cross', type_label: '路口', responsible: '田丰' },
+    { id: 'C31', name: '云飞街洛阳路37', type: 'cross', type_label: '路口', responsible: '刘添睿' },
+    { id: 'C32', name: '洛阳路-云飞街-一期', type: 'cross', type_label: '路口', responsible: '刘嘉伦' },
+    { id: 'C33', name: '解放路云飞街东侧', type: 'cross', type_label: '路口', responsible: '关丽丽' },
+    { id: 'C34', name: '解放路云飞街北侧', type: 'cross', type_label: '路口', responsible: '孙昱' }
+  ];
+
+  const stmt = db.prepare('INSERT INTO resources (id, name, type, type_label, responsible, area) VALUES (?, ?, ?, ?, ?, ?)');
+  resources.forEach(r => {
+    stmt.run(r.id, r.name, r.type, r.type_label, r.responsible, '');
+  });
+  stmt.finalize();
+
+  console.log(`✅ 资源初始化完成: ${resources.length} 个 (路段36个 + 路口34个)`);
+}
+
+module.exports = db;
