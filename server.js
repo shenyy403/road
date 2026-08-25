@@ -41,14 +41,6 @@ function getClientIp(req) {
         '';
 }
 
-function getTodayChina() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
 function getWeekKey(date = new Date()) {
     const d = new Date(date);
     d.setUTCHours(0, 0, 0, 0);
@@ -59,9 +51,37 @@ function getWeekKey(date = new Date()) {
     return `${year}-W${String(week).padStart(2, '0')}`;
 }
 
-function getDayOfWeek(date = new Date()) {
+function getTodayChina() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getWeekDates(weekKey) {
+    const parts = weekKey.split('-W');
+    const year = parseInt(parts[0]);
+    const week = parseInt(parts[1]);
+
+    const jan1 = new Date(year, 0, 1);
+    const jan1Day = jan1.getDay() || 7;
+    const daysToMonday = jan1Day === 1 ? 0 : 8 - jan1Day;
+    const monday = new Date(year, 0, 1 + daysToMonday + (week - 1) * 7);
+    
+    const dates = [];
+    for (let i = 0; i < 5; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        dates.push(d.toISOString().slice(0, 10));
+    }
+    return dates;
+}
+
+function getDayOfWeek(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
     const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return days[date.getDay()];
+    return days[d.getDay()];
 }
 
 function requireAuth(req, res, next) {
@@ -193,6 +213,7 @@ app.delete('/api/users/:id', requireAuth, (req, res) => {
         });
     });
 });
+
 // ============ 资源管理 ============
 app.get('/api/resources', requireAuth, (req, res) => {
     db.all('SELECT * FROM resources ORDER BY id', (err, rows) => {
@@ -212,9 +233,9 @@ app.post('/api/resources/import', requireAuth, (req, res) => {
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
         db.run('DELETE FROM resources');
-        const stmt = db.prepare('INSERT INTO resources (id, name, type, type_label, responsible, area) VALUES (?, ?, ?, ?, ?, ?)');
+        const stmt = db.prepare('INSERT INTO resources (id, name, type, type_label, responsible, area, camera) VALUES (?, ?, ?, ?, ?, ?, ?)');
         resources.forEach(r => {
-            stmt.run(r.id, r.name, r.type, r.type_label, r.responsible, r.area || '');
+            stmt.run(r.id, r.name, r.type, r.type_label, r.responsible, r.area || '', r.camera || '');
         });
         stmt.finalize();
         db.run('COMMIT');
@@ -224,7 +245,6 @@ app.post('/api/resources/import', requireAuth, (req, res) => {
 });
 
 // ============ 抽取相关 ============
-// 获取某周所有抽取记录（按日期分组）
 app.get('/api/records/:weekKey', requireAuth, (req, res) => {
     const { weekKey } = req.params;
     db.all(
@@ -237,7 +257,6 @@ app.get('/api/records/:weekKey', requireAuth, (req, res) => {
         (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             
-            // 按日期分组
             const grouped = {};
             rows.forEach(row => {
                 if (!grouped[row.draw_date]) {
@@ -255,7 +274,7 @@ app.get('/api/records/:weekKey', requireAuth, (req, res) => {
     );
 });
 
-// 获取当前用户今日抽取的资源（用于自动填入测评表格）
+// 获取当前用户今日抽取的资源
 app.get('/api/my-today-draw', requireAuth, (req, res) => {
     const username = req.session.user.username;
     const todayStr = getTodayChina();
@@ -286,10 +305,9 @@ app.get('/api/my-today-draw', requireAuth, (req, res) => {
     );
 });
 
-// 抽取
-app.post('/api/draw', requireAuth, (req, res) => {
-    const { weekKey, roadCount, crossCount } = req.body;
-    const todayStr = new Date().toISOString().slice(0, 10);
+// 批量抽取整周（周一到周五）
+app.post('/api/draw-week', requireAuth, (req, res) => {
+    const { weekKey } = req.body;
     const username = req.session.user.username;
     const ip = getClientIp(req);
 
@@ -297,7 +315,111 @@ app.post('/api/draw', requireAuth, (req, res) => {
         return res.status(400).json({ error: '缺少必要参数' });
     }
 
-    // 先检查今天是否已经抽取过
+    const dates = getWeekDates(weekKey);
+    
+    db.get('SELECT COUNT(*) as count FROM draw_records WHERE week_key = ?', [weekKey], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (row.count > 0) {
+            return res.json({
+                success: false,
+                message: '⚠️ 本周已有抽取记录，请先重置再重新抽取！'
+            });
+        }
+
+        db.all('SELECT * FROM resources', (err, allResources) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const roads = allResources.filter(r => r.type === 'road');
+            const crosses = allResources.filter(r => r.type === 'cross');
+            
+            const shuffledRoads = roads.sort(() => Math.random() - 0.5);
+            const shuffledCrosses = crosses.sort(() => Math.random() - 0.5);
+
+            const dailyRoadCount = 8;
+            const dailyCrossCount = 7;
+            
+            const totalRoadNeeded = dailyRoadCount * dates.length;
+            const totalCrossNeeded = dailyCrossCount * dates.length;
+
+            if (shuffledRoads.length < totalRoadNeeded || shuffledCrosses.length < totalCrossNeeded) {
+                return res.json({
+                    success: false,
+                    message: `⚠️ 资源不足！需要路段${totalRoadNeeded}个（现有${shuffledRoads.length}个），路口${totalCrossNeeded}个（现有${shuffledCrosses.length}个）`
+                });
+            }
+
+            let roadIndex = 0;
+            let crossIndex = 0;
+            const allRecords = [];
+
+            dates.forEach((date) => {
+                const dayRoads = shuffledRoads.slice(roadIndex, roadIndex + dailyRoadCount);
+                const dayCrosses = shuffledCrosses.slice(crossIndex, crossIndex + dailyCrossCount);
+                
+                roadIndex += dailyRoadCount;
+                crossIndex += dailyCrossCount;
+
+                const dayRecords = [...dayRoads, ...dayCrosses];
+                dayRecords.forEach(resource => {
+                    allRecords.push({
+                        resource_id: resource.id,
+                        draw_date: date,
+                        week_key: weekKey
+                    });
+                });
+            });
+
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
+                const stmt = db.prepare('INSERT INTO draw_records (resource_id, draw_date, week_key) VALUES (?, ?, ?)');
+                
+                allRecords.forEach(record => {
+                    stmt.run(record.resource_id, record.draw_date, record.week_key);
+                });
+                
+                stmt.finalize();
+                db.run('COMMIT', (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ error: '提交失败' });
+                    }
+
+                    const totalCount = allRecords.length;
+                    logOperation(username, '批量抽取整周', `共${totalCount}条记录（${dates.length}天）`, ip);
+                    
+                    const dailyStats = dates.map((date) => {
+                        const dayRecords = allRecords.filter(r => r.draw_date === date);
+                        return {
+                            date: date,
+                            dayOfWeek: getDayOfWeek(date),
+                            count: dayRecords.length
+                        };
+                    });
+
+                    res.json({
+                        success: true,
+                        message: `✅ 成功抽取整周！共 ${dates.length} 天，${totalCount} 个点位`,
+                        total: totalCount,
+                        days: dates.length,
+                        dailyStats: dailyStats
+                    });
+                });
+            });
+        });
+    });
+});
+
+// 单日抽取（保留兼容）
+app.post('/api/draw', requireAuth, (req, res) => {
+    const { weekKey, roadCount, crossCount } = req.body;
+    const todayStr = getTodayChina();
+    const username = req.session.user.username;
+    const ip = getClientIp(req);
+
+    if (!weekKey) {
+        return res.status(400).json({ error: '缺少必要参数' });
+    }
+
     db.get(
         'SELECT COUNT(*) as count FROM draw_records WHERE week_key = ? AND draw_date = ?',
         [weekKey, todayStr],
@@ -385,7 +507,7 @@ app.delete('/api/reset/:weekKey', requireAuth, (req, res) => {
 // ============ 测评数据相关 ============
 app.get('/api/my-assessments-today', requireAuth, (req, res) => {
     const username = req.session.user.username;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayChina();
 
     db.all(
         `SELECT * FROM assessments
@@ -402,7 +524,7 @@ app.get('/api/my-assessments-today', requireAuth, (req, res) => {
 
 app.post('/api/assessments/submit', requireAuth, (req, res) => {
     const username = req.session.user.username;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayChina();
     const { assessments } = req.body;
 
     if (!assessments || !Array.isArray(assessments) || assessments.length === 0) {
@@ -525,29 +647,28 @@ app.get('/api/admin/all-assessments', requireAuth, (req, res) => {
         return res.status(403).json({ error: '需要管理员权限' });
     }
 
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, drawDate } = req.query;
     let sql = `
         SELECT 
             a.*,
             r.type_label as resource_type_label
         FROM assessments a
         LEFT JOIN resources r ON a.name = r.name
-        ORDER BY a.assessment_date DESC, a.type DESC, a.row_index
+        WHERE 1=1
     `;
     let params = [];
 
     if (startDate && endDate) {
-        sql = `
-            SELECT 
-                a.*,
-                r.type_label as resource_type_label
-            FROM assessments a
-            LEFT JOIN resources r ON a.name = r.name
-            WHERE a.assessment_date BETWEEN ? AND ?
-            ORDER BY a.assessment_date DESC, a.type DESC, a.row_index
-        `;
-        params = [startDate, endDate];
+        sql += ` AND a.assessment_date BETWEEN ? AND ?`;
+        params.push(startDate, endDate);
     }
+    
+    if (drawDate) {
+        sql += ` AND a.assessment_date = ?`;
+        params.push(drawDate);
+    }
+
+    sql += ` ORDER BY a.assessment_date DESC, a.type DESC, a.row_index`;
 
     db.all(sql, params, (err, rows) => {
         if (err) {
@@ -563,33 +684,68 @@ app.get('/api/admin/export-assessments', requireAuth, (req, res) => {
         return res.status(403).json({ error: '需要管理员权限' });
     }
 
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, drawDate } = req.query;
     let sql = `
         SELECT 
             a.*,
             r.type_label as resource_type_label
         FROM assessments a
         LEFT JOIN resources r ON a.name = r.name
-        ORDER BY a.assessment_date DESC, a.type DESC, a.row_index
+        WHERE 1=1
     `;
     let params = [];
 
     if (startDate && endDate) {
-        sql = `
-            SELECT 
-                a.*,
-                r.type_label as resource_type_label
-            FROM assessments a
-            LEFT JOIN resources r ON a.name = r.name
-            WHERE a.assessment_date BETWEEN ? AND ?
-            ORDER BY a.assessment_date DESC, a.type DESC, a.row_index
-        `;
-        params = [startDate, endDate];
+        sql += ` AND a.assessment_date BETWEEN ? AND ?`;
+        params.push(startDate, endDate);
     }
+    
+    if (drawDate) {
+        sql += ` AND a.assessment_date = ?`;
+        params.push(drawDate);
+    }
+
+    sql += ` ORDER BY a.assessment_date DESC, a.type DESC, a.row_index`;
 
     db.all(sql, params, (err, rows) => {
         if (err) {
             console.error('导出数据失败:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
+});
+
+// 导出抽取记录（按日期筛选）
+app.get('/api/admin/export-draw-records', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: '需要管理员权限' });
+    }
+
+    const { weekKey, drawDate } = req.query;
+    let sql = `
+        SELECT r.id, r.name, r.type_label, r.responsible, dr.draw_date
+        FROM draw_records dr
+        JOIN resources r ON dr.resource_id = r.id
+        WHERE 1=1
+    `;
+    let params = [];
+
+    if (weekKey) {
+        sql += ` AND dr.week_key = ?`;
+        params.push(weekKey);
+    }
+    
+    if (drawDate) {
+        sql += ` AND dr.draw_date = ?`;
+        params.push(drawDate);
+    }
+
+    sql += ` ORDER BY dr.draw_date ASC, r.type DESC`;
+
+    db.all(sql, params, (err, rows) => {
+        if (err) {
+            console.error('导出抽取记录失败:', err);
             return res.status(500).json({ error: err.message });
         }
         res.json(rows);
