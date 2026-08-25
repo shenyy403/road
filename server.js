@@ -42,7 +42,7 @@ function getClientIp(req) {
 }
 
 function getWeekKey(date = new Date()) {
-    // 使用本地时间，避免时区问题
+    // 使用本地时间
     const d = new Date(date);
     const year = d.getFullYear();
     const month = d.getMonth();
@@ -51,10 +51,19 @@ function getWeekKey(date = new Date()) {
     const localDate = new Date(year, month, day);
     const jan1 = new Date(year, 0, 1);
     
-    const diffDays = Math.floor((localDate - jan1) / 86400000);
-    const jan1Day = jan1.getDay() || 7;
+    // 1月1日是星期几（周一=1, 周日=7）
+    let jan1Day = jan1.getDay();
+    if (jan1Day === 0) jan1Day = 7;
     
-    const week = Math.ceil((diffDays + jan1Day) / 7);
+    // 当前日期是今年的第几天
+    const diffDays = Math.floor((localDate - jan1) / 86400000);
+    
+    // 计算周一偏移量
+    const daysToMonday = (jan1Day === 1) ? 0 : (8 - jan1Day);
+    
+    // 计算周数（以周一为起始）
+    const week = Math.ceil((diffDays + daysToMonday + 1) / 7);
+    
     return `${year}-W${String(week).padStart(2, '0')}`;
 }
 
@@ -71,21 +80,20 @@ function getWeekDates(weekKey) {
     const year = parseInt(parts[0]);
     const week = parseInt(parts[1]);
 
+    // 1月1日
     const jan1 = new Date(year, 0, 1);
     let jan1Day = jan1.getDay();
-    if (jan1Day === 0) jan1Day = 7;
+    if (jan1Day === 0) jan1Day = 7; // 周日→7
     
-    let daysToMonday;
-    if (jan1Day === 1) {
-        daysToMonday = 0;
-    } else {
-        daysToMonday = 8 - jan1Day;
-    }
-    
+    // 计算第一个周一
+    const daysToMonday = (jan1Day === 1) ? 0 : (8 - jan1Day);
     const firstMonday = new Date(year, 0, 1 + daysToMonday);
+    
+    // 计算目标周的周一
     const targetMonday = new Date(firstMonday);
     targetMonday.setDate(firstMonday.getDate() + (week - 1) * 7);
     
+    // 生成周一到周五
     const dates = [];
     for (let i = 0; i < 5; i++) {
         const d = new Date(targetMonday);
