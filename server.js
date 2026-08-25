@@ -649,6 +649,45 @@ app.delete('/api/reset/:weekKey', requireAuth, (req, res) => {
     });
 });
 
+// ===== 导入本周点位记录（管理员） =====
+app.post('/api/import-week-records', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: '需要管理员权限' });
+    }
+
+    const { records } = req.body;
+    if (!records || !Array.isArray(records) || records.length === 0) {
+        return res.status(400).json({ error: '请提供有效的记录数据' });
+    }
+
+    const username = req.session.user.username;
+    const ip = getClientIp(req);
+
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        const stmt = db.prepare('INSERT INTO draw_records (resource_id, draw_date, week_key) VALUES (?, ?, ?)');
+        
+        let successCount = 0;
+        records.forEach(record => {
+            if (record.resource_id && record.draw_date && record.week_key) {
+                stmt.run(record.resource_id, record.draw_date, record.week_key);
+                successCount++;
+            }
+        });
+        
+        stmt.finalize();
+        db.run('COMMIT', (err) => {
+            if (err) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: '导入失败' });
+            }
+            logOperation(username, '导入本周点位', `成功导入 ${successCount} 条记录`, ip);
+            res.json({ success: true, count: successCount });
+        });
+    });
+});
+
+
 // ============ 测评数据相关 ============
 app.get('/api/my-assessments-today', requireAuth, (req, res) => {
     const username = req.session.user.username;
