@@ -139,8 +139,9 @@
 
     <div class="action-bar">
         <button class="btn btn-primary" id="drawWeekBtn">🎲 抽取整周</button>
-        <button class="btn btn-outline" id="resetBtn">🔄 重置本周</button>
+        <button class="btn btn-outline" id="resetBtn" style="display:none;">🔄 重置本周</button>
         <button class="btn btn-success" id="exportBtn">📥 导出 CSV</button>
+        <button class="btn btn-warning" id="importWeekBtn" style="display:none;">📤 导入本周点位</button>
         <button class="btn btn-admin" id="adminToggleBtn">⚙️ 管理</button>
         <button class="btn btn-assessment" id="assessmentBtn">📝 数据填写</button>
         <span class="draw-info" id="drawInfo">📌 整周: 每天路段8个 + 路口7个</span>
@@ -283,6 +284,7 @@
     const drawWeekBtn = document.getElementById('drawWeekBtn');
     const resetBtn = document.getElementById('resetBtn');
     const exportBtn = document.getElementById('exportBtn');
+    const importWeekBtn = document.getElementById('importWeekBtn');
     const adminToggleBtn = document.getElementById('adminToggleBtn');
     const adminPanel = document.getElementById('adminPanel');
     const closeAdminPanel = document.getElementById('closeAdminPanel');
@@ -373,6 +375,8 @@
             
             if (currentUser.role === 'admin') {
                 drawWeekBtn.style.display = 'inline-flex';
+                resetBtn.style.display = 'inline-flex';
+                importWeekBtn.style.display = 'inline-flex';
                 adminToggleBtn.classList.remove('hidden');
                 const end = new Date();
                 const start = new Date();
@@ -381,6 +385,8 @@
                 summaryEndDate.value = end.toISOString().slice(0, 10);
             } else {
                 drawWeekBtn.style.display = 'none';
+                resetBtn.style.display = 'none';
+                importWeekBtn.style.display = 'none';
                 adminToggleBtn.classList.add('hidden');
                 adminPanel.classList.add('hidden');
             }
@@ -549,6 +555,124 @@
         link.download = '测评抽取_' + weekKey + '.csv';
         link.click();
         URL.revokeObjectURL(link.href);
+    }
+
+    // ===== 导入本周点位（XLSX） =====
+    function doImportWeek() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.xlsx,.xls';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+        
+        fileInput.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                
+                // 解析数据
+                const records = [];
+                let headerFound = false;
+                let dateCol = -1, nameCol = -1, typeCol = -1, respCol = -1;
+                
+                for (const row of rows) {
+                    if (row.length < 3) continue;
+                    
+                    const firstCell = String(row[0] || '');
+                    
+                    // 检测表头
+                    if (!headerFound) {
+                        // 查找列索引
+                        for (let i = 0; i < row.length; i++) {
+                            const cell = String(row[i] || '').trim();
+                            if (cell.includes('日期') || cell === '日期') dateCol = i;
+                            if (cell.includes('名称') || cell === '名称' || cell.includes('点位')) nameCol = i;
+                            if (cell.includes('类型') || cell === '类型') typeCol = i;
+                            if (cell.includes('责任人') || cell === '责任人') respCol = i;
+                        }
+                        
+                        if (dateCol >= 0 && nameCol >= 0 && typeCol >= 0 && respCol >= 0) {
+                            headerFound = true;
+                        }
+                        continue;
+                    }
+                    
+                    // 如果有表头但没找到，用位置猜测
+                    if (!headerFound && row.length >= 6) {
+                        headerFound = true;
+                        dateCol = 1;
+                        nameCol = 3;
+                        typeCol = 4;
+                        respCol = 5;
+                    }
+                    
+                    if (dateCol < 0 || nameCol < 0) continue;
+                    
+                    const date = String(row[dateCol] || '').trim();
+                    const name = String(row[nameCol] || '').trim();
+                    const type = String(row[typeCol] || '').trim();
+                    const responsible = String(row[respCol] || '').trim();
+                    
+                    if (!name || !date) continue;
+                    
+                    // 查找对应的资源ID
+                    let resource = allResources.find(r => r.name === name);
+                    if (!resource && responsible) {
+                        resource = allResources.find(r => r.name === name && r.responsible === responsible);
+                    }
+                    if (!resource) {
+                        console.warn('未找到资源:', name);
+                        continue;
+                    }
+                    
+                    // 判断类型
+                    let typeLabel = type;
+                    if (typeLabel.includes('路') && !typeLabel.includes('口')) typeLabel = '路段';
+                    else if (typeLabel.includes('口')) typeLabel = '路口';
+                    
+                    records.push({
+                        resource_id: resource.id,
+                        draw_date: date,
+                        week_key: weekKey
+                    });
+                }
+                
+                if (records.length === 0) {
+                    alert('⚠️ 没有解析到有效数据，请检查文件格式');
+                    return;
+                }
+                
+                if (!confirm(`确认导入 ${records.length} 条点位记录？\n（将先清空本周数据再导入）`)) return;
+                
+                // 先清空本周，再导入
+                await fetch(API_BASE + '/api/reset/' + weekKey, { method: 'DELETE' });
+                
+                // 批量导入
+                const resp = await fetch(API_BASE + '/api/import-week-records', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ records })
+                });
+                const result = await resp.json();
+                
+                if (result.success) {
+                    alert('✅ 成功导入 ' + result.count + ' 条记录！');
+                    await loadData();
+                } else {
+                    alert('❌ 导入失败：' + result.message);
+                }
+            } catch (e) {
+                alert('❌ 导入失败：' + e.message);
+            }
+            fileInput.remove();
+        });
+        
+        fileInput.click();
     }
 
     // ===== 导出功能 =====
@@ -756,6 +880,9 @@
         var username = currentUser ? currentUser.username : 'admin';
         window.open('/assessment.html?user=' + encodeURIComponent(username), '_blank');
     });
+
+    // ===== 导入按钮事件 =====
+    importWeekBtn.addEventListener('click', doImportWeek);
 
     // ===== 导出事件绑定 =====
     exportAllAssessments.addEventListener('click', function() {
