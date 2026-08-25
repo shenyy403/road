@@ -332,25 +332,30 @@
         mainContainer.classList.add('hidden');
     }
 
-    function showMain() {
-        loginContainer.classList.add('hidden');
-        mainContainer.classList.remove('hidden');
-        if (currentUser) {
-            currentUserSpan.textContent = '👤 ' + currentUser.username;
-            if (currentUser.role === 'admin') {
-                adminToggleBtn.classList.remove('hidden');
-                const end = new Date();
-                const start = new Date();
-                start.setDate(start.getDate() - 30);
-                summaryStartDate.value = start.toISOString().slice(0, 10);
-                summaryEndDate.value = end.toISOString().slice(0, 10);
-            } else {
-                adminToggleBtn.classList.add('hidden');
-                adminPanel.classList.add('hidden');
-            }
+function showMain() {
+    loginContainer.classList.add('hidden');
+    mainContainer.classList.remove('hidden');
+    if (currentUser) {
+        currentUserSpan.textContent = '👤 ' + currentUser.username;
+        
+        // ===== 根据角色显示/隐藏抽取按钮 =====
+        const drawBtn = document.getElementById('drawBtn');
+        if (currentUser.role === 'admin') {
+            drawBtn.style.display = 'inline-flex';
+            adminToggleBtn.classList.remove('hidden');
+            const end = new Date();
+            const start = new Date();
+            start.setDate(start.getDate() - 30);
+            summaryStartDate.value = start.toISOString().slice(0, 10);
+            summaryEndDate.value = end.toISOString().slice(0, 10);
+        } else {
+            drawBtn.style.display = 'none';
+            adminToggleBtn.classList.add('hidden');
+            adminPanel.classList.add('hidden');
         }
-        drawInfo.textContent = '📌 每日: 路段' + DAILY_ROAD_MIN + '-' + DAILY_ROAD_MAX + '个 + 路口' + DAILY_CROSS_MIN + '-' + DAILY_CROSS_MAX + '个';
     }
+    drawInfo.textContent = '📌 每日: 路段7-8个 + 路口6-7个';
+}
 
     async function doLogin() {
         const username = loginUsername.value.trim();
