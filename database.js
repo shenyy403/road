@@ -12,9 +12,6 @@ const db = new sqlite3.Database(dbPath);
 
 db.run('PRAGMA foreign_keys = ON');
 
-// ============================================================
-// 初始化所有表
-// ============================================================
 db.serialize(() => {
   // 用户表
   db.run(`
@@ -27,7 +24,6 @@ db.serialize(() => {
     )
   `);
 
-  // 操作日志表
   db.run(`
     CREATE TABLE IF NOT EXISTS operation_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +35,6 @@ db.serialize(() => {
     )
   `);
 
-  // 资源表
   db.run(`
     CREATE TABLE IF NOT EXISTS resources (
       id TEXT PRIMARY KEY,
@@ -51,7 +46,6 @@ db.serialize(() => {
     )
   `);
 
-  // 抽取记录表
   db.run(`
     CREATE TABLE IF NOT EXISTS draw_records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +56,6 @@ db.serialize(() => {
     )
   `);
 
-  // 测评数据表
   db.run(`
     CREATE TABLE IF NOT EXISTS assessments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,14 +95,10 @@ db.serialize(() => {
     )
   `);
 
-  // ============================================================
-  // 创建用户（2个超管 + 25个普通用户）
-  // ============================================================
+  // ===== 创建用户 =====
   const allUsers = [
-    // 超级管理员
     { username: '石晓婷', password: '199639', role: 'admin' },
     { username: '白书语', password: 'Ywxtly0428', role: 'admin' },
-    // 普通用户
     { username: '韩江', password: '123456', role: 'user' },
     { username: '关鑫', password: '123456', role: 'user' },
     { username: '王鑫', password: '123456', role: 'user' },
@@ -143,14 +132,12 @@ db.serialize(() => {
       if (!row) {
         db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
           [user.username, user.password, user.role]);
-        console.log(`✅ 用户已创建: ${user.username} (${user.role})`);
+        console.log(`✅ 用户已创建: ${user.username}`);
       }
     });
   });
 
-  // ============================================================
-  // 初始化资源（路段 R1~R36 + 路口 C1~C34）
-  // ============================================================
+  // ===== 初始化资源 =====
   db.get('SELECT COUNT(*) as count FROM resources', (err, row) => {
     if (err) return console.error(err);
     if (row.count === 0) {
@@ -160,12 +147,8 @@ db.serialize(() => {
   });
 });
 
-// ============================================================
-// 资源数据
-// ============================================================
 function initDefaultResources() {
   const resources = [
-    // ===== 路段 (R1~R36) =====
     { id: 'R1', name: '凌川桥桥南头00142', type: 'road', type_label: '路段', responsible: '韩江' },
     { id: 'R2', name: '锦兴路-成都街-五期', type: 'road', type_label: '路段', responsible: '关鑫' },
     { id: 'R3', name: '松坡路3段-24号楼-四期', type: 'road', type_label: '路段', responsible: '王鑫' },
@@ -202,8 +185,6 @@ function initDefaultResources() {
     { id: 'R34', name: '解放路-山西街西南角—YD4', type: 'road', type_label: '路段', responsible: '王鼎群' },
     { id: 'R35', name: '实华园小区-北门-四期', type: 'road', type_label: '路段', responsible: '付彧' },
     { id: 'R36', name: '重庆路新制街00369', type: 'road', type_label: '路段', responsible: '田丰' },
-
-    // ===== 路口 (C1~C34) =====
     { id: 'C1', name: '锦兴路成都街00151', type: 'cross', type_label: '路口', responsible: '韩江' },
     { id: 'C2', name: '成都街与锦兴路交叉口卡口—YD2', type: 'cross', type_label: '路口', responsible: '关鑫' },
     { id: 'C3', name: '解放路士英街00102', type: 'cross', type_label: '路口', responsible: '王鑫' },
@@ -246,7 +227,7 @@ function initDefaultResources() {
   });
   stmt.finalize();
 
-  console.log(`✅ 资源初始化完成: ${resources.length} 个 (路段36个 + 路口34个)`);
+  console.log(`✅ 资源初始化完成: ${resources.length} 个`);
 }
 
 module.exports = db;
