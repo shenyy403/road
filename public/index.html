@@ -557,123 +557,184 @@
         URL.revokeObjectURL(link.href);
     }
 
-    // ===== 导入本周点位（XLSX） =====
-    function doImportWeek() {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = '.xlsx,.xls';
-        fileInput.style.display = 'none';
-        document.body.appendChild(fileInput);
+// ===== 导入本周点位（XLSX） =====
+function doImportWeek() {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.xlsx,.xls';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+    
+    fileInput.addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
         
-        fileInput.addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
             
-            try {
-                const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                
-                // 解析数据
-                const records = [];
-                let headerFound = false;
-                let dateCol = -1, nameCol = -1, typeCol = -1, respCol = -1;
-                
-                for (const row of rows) {
-                    if (row.length < 3) continue;
-                    
-                    const firstCell = String(row[0] || '');
-                    
-                    // 检测表头
-                    if (!headerFound) {
-                        // 查找列索引
-                        for (let i = 0; i < row.length; i++) {
-                            const cell = String(row[i] || '').trim();
-                            if (cell.includes('日期') || cell === '日期') dateCol = i;
-                            if (cell.includes('名称') || cell === '名称' || cell.includes('点位')) nameCol = i;
-                            if (cell.includes('类型') || cell === '类型') typeCol = i;
-                            if (cell.includes('责任人') || cell === '责任人') respCol = i;
-                        }
-                        
-                        if (dateCol >= 0 && nameCol >= 0 && typeCol >= 0 && respCol >= 0) {
-                            headerFound = true;
-                        }
-                        continue;
-                    }
-                    
-                    // 如果有表头但没找到，用位置猜测
-                    if (!headerFound && row.length >= 6) {
-                        headerFound = true;
-                        dateCol = 1;
-                        nameCol = 3;
-                        typeCol = 4;
-                        respCol = 5;
-                    }
-                    
-                    if (dateCol < 0 || nameCol < 0) continue;
-                    
-                    const date = String(row[dateCol] || '').trim();
-                    const name = String(row[nameCol] || '').trim();
-                    const type = String(row[typeCol] || '').trim();
-                    const responsible = String(row[respCol] || '').trim();
-                    
-                    if (!name || !date) continue;
-                    
-                    // 查找对应的资源ID
-                    let resource = allResources.find(r => r.name === name);
-                    if (!resource && responsible) {
-                        resource = allResources.find(r => r.name === name && r.responsible === responsible);
-                    }
-                    if (!resource) {
-                        console.warn('未找到资源:', name);
-                        continue;
-                    }
-                    
-                    // 判断类型
-                    let typeLabel = type;
-                    if (typeLabel.includes('路') && !typeLabel.includes('口')) typeLabel = '路段';
-                    else if (typeLabel.includes('口')) typeLabel = '路口';
-                    
-                    records.push({
-                        resource_id: resource.id,
-                        draw_date: date,
-                        week_key: weekKey
-                    });
-                }
-                
-                if (records.length === 0) {
-                    alert('⚠️ 没有解析到有效数据，请检查文件格式');
-                    return;
-                }
-                
-                if (!confirm(`确认导入 ${records.length} 条点位记录？\n（将先清空本周数据再导入）`)) return;
-                
-                // 先清空本周，再导入
-                await fetch(API_BASE + '/api/reset/' + weekKey, { method: 'DELETE' });
-                
-                // 批量导入
-                const resp = await fetch(API_BASE + '/api/import-week-records', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ records })
-                });
-                const result = await resp.json();
-                
-                if (result.success) {
-                    alert('✅ 成功导入 ' + result.count + ' 条记录！');
-                    await loadData();
-                } else {
-                    alert('❌ 导入失败：' + result.message);
-                }
-            } catch (e) {
-                alert('❌ 导入失败：' + e.message);
+            // 解析数据
+            const records = [];
+            let headerFound = false;
+            let dateCol = -1, nameCol = -1, typeCol = -1, respCol = -1;
+            
+            // ===== Excel 日期转换函数 =====
+            function excelDateToDateStr(excelDate) {
+                // Excel 日期从 1900-01-01 开始
+                const excelEpoch = new Date(1899, 11, 30);
+                const days = parseFloat(excelDate);
+                const date = new Date(excelEpoch.getTime() + days * 86400000);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
             }
-            fileInput.remove();
-        });
-        
-        fileInput.click();
-    }
+            
+            for (const row of rows) {
+                if (row.length < 3) continue;
+                
+                const firstCell = String(row[0] || '');
+                
+                // 检测表头
+                if (!headerFound) {
+                    for (let i = 0; i < row.length; i++) {
+                        const cell = String(row[i] || '').trim();
+                        if (cell.includes('日期') || cell === '日期') dateCol = i;
+                        if (cell.includes('名称') || cell === '名称' || cell.includes('点位')) nameCol = i;
+                        if (cell.includes('类型') || cell === '类型') typeCol = i;
+                        if (cell.includes('责任人') || cell === '责任人') respCol = i;
+                    }
+                    
+                    // 如果找到了表头，跳过这行
+                    if (dateCol >= 0 && nameCol >= 0 && typeCol >= 0 && respCol >= 0) {
+                        headerFound = true;
+                        continue;
+                    }
+                }
+                
+                // 如果没有表头但行数>=6，用位置猜测
+                if (!headerFound && row.length >= 6) {
+                    headerFound = true;
+                    dateCol = 1;
+                    nameCol = 3;
+                    typeCol = 4;
+                    respCol = 5;
+                }
+                
+                if (dateCol < 0 || nameCol < 0) continue;
+                
+                // ===== 处理日期 =====
+                let dateStr = '';
+                const dateCell = row[dateCol];
+                
+                if (dateCell !== undefined && dateCell !== null) {
+                    if (typeof dateCell === 'number') {
+                        // Excel 日期数字 → 转换
+                        dateStr = excelDateToDateStr(dateCell);
+                    } else if (typeof dateCell === 'string') {
+                        // 字符串日期 → 尝试解析
+                        const trimmed = dateCell.trim();
+                        // 尝试匹配 YYYY-MM-DD 格式
+                        const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                        if (match) {
+                            dateStr = `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+                        } else {
+                            // 尝试其他格式
+                            const d = new Date(trimmed);
+                            if (!isNaN(d.getTime())) {
+                                const year = d.getFullYear();
+                                const month = String(d.getMonth() + 1).padStart(2, '0');
+                                const day = String(d.getDate()).padStart(2, '0');
+                                dateStr = `${year}-${month}-${day}`;
+                            }
+                        }
+                    }
+                }
+                
+                if (!dateStr) {
+                    console.warn('无法解析日期:', dateCell);
+                    continue;
+                }
+                
+                const name = String(row[nameCol] || '').trim();
+                const type = String(row[typeCol] || '').trim();
+                const responsible = String(row[respCol] || '').trim();
+                
+                if (!name || !dateStr) continue;
+                
+                // 查找对应的资源ID
+                let resource = allResources.find(r => r.name === name);
+                if (!resource && responsible) {
+                    resource = allResources.find(r => r.name === name && r.responsible === responsible);
+                }
+                if (!resource) {
+                    console.warn('未找到资源:', name);
+                    continue;
+                }
+                
+                // 判断类型
+                let typeLabel = type;
+                if (typeLabel.includes('路') && !typeLabel.includes('口')) typeLabel = '路段';
+                else if (typeLabel.includes('口')) typeLabel = '路口';
+                
+                records.push({
+                    resource_id: resource.id,
+                    draw_date: dateStr,
+                    week_key: weekKey
+                });
+            }
+            
+            if (records.length === 0) {
+                alert('⚠️ 没有解析到有效数据，请检查文件格式');
+                return;
+            }
+            
+            // 按日期分组显示预览
+            const dateGroups = {};
+            records.forEach(r => {
+                if (!dateGroups[r.draw_date]) dateGroups[r.draw_date] = [];
+                dateGroups[r.draw_date].push(r.resource_id);
+            });
+            
+            let previewMsg = '📋 将导入以下数据：\n\n';
+            Object.keys(dateGroups).sort().forEach(date => {
+                const dayLabel = getDayLabel(date);
+                previewMsg += `📅 ${date} (${dayLabel})：${dateGroups[date].length} 个点位\n`;
+            });
+            previewMsg += `\n共计 ${records.length} 条记录`;
+            
+            if (!confirm(previewMsg + '\n\n确认导入？')) return;
+            
+            // 先清空本周，再导入
+            await fetch(API_BASE + '/api/reset/' + weekKey, { method: 'DELETE' });
+            
+            // 批量导入
+            const resp = await fetch(API_BASE + '/api/import-week-records', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ records })
+            });
+            const result = await resp.json();
+            
+            if (result.success) {
+                alert('✅ 成功导入 ' + result.count + ' 条记录！');
+                await loadData();
+            } else {
+                alert('❌ 导入失败：' + (result.message || '未知错误'));
+            }
+        } catch (e) {
+            alert('❌ 导入失败：' + e.message);
+            console.error(e);
+        }
+        fileInput.remove();
+    });
+    
+    fileInput.click();
+}
+
+    
 
     // ===== 导出功能 =====
     async function exportAssessments(params, filename) {
