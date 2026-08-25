@@ -41,6 +41,14 @@ function getClientIp(req) {
         '';
 }
 
+function getTodayChina() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function getWeekKey(date = new Date()) {
     const d = new Date(date);
     d.setUTCHours(0, 0, 0, 0);
@@ -250,7 +258,7 @@ app.get('/api/records/:weekKey', requireAuth, (req, res) => {
 // 获取当前用户今日抽取的资源（用于自动填入测评表格）
 app.get('/api/my-today-draw', requireAuth, (req, res) => {
     const username = req.session.user.username;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayChina();
     const weekKey = getWeekKey();
 
     db.all(
