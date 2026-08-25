@@ -35,17 +35,18 @@ db.serialize(() => {
     )
   `);
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS resources (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT NOT NULL,
-    type_label TEXT NOT NULL,
-    responsible TEXT NOT NULL,
-    area TEXT,
-    camera TEXT
-  )
-`);
+  // 资源表（添加了 camera 字段）
+  db.run(`
+    CREATE TABLE IF NOT EXISTS resources (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      type_label TEXT NOT NULL,
+      responsible TEXT NOT NULL,
+      area TEXT,
+      camera TEXT
+    )
+  `);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS draw_records (
@@ -148,6 +149,9 @@ db.run(`
   });
 });
 
+// ============================================================
+// 资源数据
+// ============================================================
 function initDefaultResources() {
   const resources = [
     // ===== 路段 (R1~R36) =====
@@ -232,15 +236,6 @@ function initDefaultResources() {
   stmt.finalize();
 
   console.log(`✅ 资源初始化完成: ${resources.length} 个 (路段36个 + 路口34个)`);
-}
-
-  const stmt = db.prepare('INSERT INTO resources (id, name, type, type_label, responsible, area, camera) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  resources.forEach(r => {
-    stmt.run(r.id, r.name, r.type, r.type_label, r.responsible, '');
-  });
-  stmt.finalize();
-
-  console.log(`✅ 资源初始化完成: ${resources.length} 个`);
 }
 
 module.exports = db;
