@@ -105,6 +105,8 @@
         .resource-stats span { font-size: 0.95rem; }
         .resource-stats strong { color: #1d6f9c; }
         .resource-stats .btn { padding: 4px 16px; font-size: 0.8rem; }
+        .export-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+        .export-actions .btn { padding: 4px 16px; font-size: 0.8rem; }
         @media (max-width: 700px) { .container { padding: 20px 16px; } .stats-grid { flex-direction: column; align-items: stretch; } .user-info { margin-left: 0; } .log-item { flex-wrap: wrap; } .log-item .log-time { min-width: auto; } .summary-filters { flex-direction: column; align-items: stretch; } }
     </style>
 </head>
@@ -136,12 +138,12 @@
     </div>
 
     <div class="action-bar">
-        <button class="btn btn-primary" id="drawBtn">🎲 抽取今日测评</button>
+        <button class="btn btn-primary" id="drawWeekBtn">🎲 抽取整周</button>
         <button class="btn btn-outline" id="resetBtn">🔄 重置本周</button>
         <button class="btn btn-success" id="exportBtn">📥 导出 CSV</button>
         <button class="btn btn-admin" id="adminToggleBtn">⚙️ 管理</button>
         <button class="btn btn-assessment" id="assessmentBtn">📝 数据填写</button>
-        <span class="draw-info" id="drawInfo">📌 每日: 路段7-8个 + 路口6-7个</span>
+        <span class="draw-info" id="drawInfo">📌 整周: 每天路段8个 + 路口7个</span>
         <span style="font-size:0.85rem;color:#5a7a92;margin-left:auto;" id="statusText">✅ 已连接</span>
     </div>
 
@@ -152,6 +154,7 @@
             <button class="tab-btn" data-tab="tab-resources">📋 资源管理</button>
             <button class="tab-btn" data-tab="tab-logs">📜 操作日志</button>
             <button class="tab-btn" data-tab="tab-summary">📊 数据汇总</button>
+            <button class="tab-btn" data-tab="tab-export">📤 数据导出</button>
         </div>
 
         <div id="tab-users" class="tab-content active">
@@ -200,12 +203,11 @@
 
         <div id="tab-summary" class="tab-content">
             <div class="summary-filters">
-                <span style="font-weight:500;">📅 日期：</span>
+                <span style="font-weight:500;">📅 日期范围：</span>
                 <input type="date" id="summaryStartDate">
                 <span>~</span>
                 <input type="date" id="summaryEndDate">
                 <button class="btn btn-primary" id="summaryFilterBtn">筛选</button>
-                <button class="btn btn-success" id="summaryExportBtn">📥 导出 XLSX</button>
                 <span style="font-size:0.85rem;color:#5a7a92;margin-left:auto;" id="summaryCount">共 0 条记录</span>
             </div>
             <div class="table-wrap summary-wrap">
@@ -213,6 +215,30 @@
                     <thead><tr><th>#</th><th>类型</th><th>名称</th><th>责任人</th><th>测评人</th><th>测评日期</th><th>遵章率</th><th>备注</th></tr></thead>
                     <tbody id="summaryBody"><tr><td colspan="8" class="empty-state">暂无数据</td></tr></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- 导出选项卡 -->
+        <div id="tab-export" class="tab-content">
+            <h4 style="margin:0 0 12px 0;">📤 导出数据</h4>
+            
+            <div style="background:#f0f5fe;padding:16px;border-radius:12px;margin-bottom:16px;">
+                <div style="font-weight:600;margin-bottom:8px;">📋 导出测评数据</div>
+                <div class="export-actions">
+                    <button class="btn btn-success" id="exportAllAssessments">📥 导出全部测评数据</button>
+                    <button class="btn btn-primary" id="exportTodayAssessments">📥 导出今日测评数据</button>
+                    <input type="date" id="exportSingleDate" style="padding:4px 8px;border:2px solid #d5dce8;border-radius:6px;font-size:0.85rem;">
+                    <button class="btn btn-warning" id="exportDateAssessments">📥 导出指定日期</button>
+                </div>
+            </div>
+
+            <div style="background:#f0f5fe;padding:16px;border-radius:12px;">
+                <div style="font-weight:600;margin-bottom:8px;">📋 导出抽取记录</div>
+                <div class="export-actions">
+                    <button class="btn btn-success" id="exportAllDrawRecords">📥 导出本周全部抽取</button>
+                    <input type="date" id="exportDrawDate" style="padding:4px 8px;border:2px solid #d5dce8;border-radius:6px;font-size:0.85rem;">
+                    <button class="btn btn-warning" id="exportDateDrawRecords">📥 导出指定日期抽取</button>
+                </div>
             </div>
         </div>
     </div>
@@ -232,15 +258,14 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 (function() {
     'use strict';
 
     const API_BASE = window.location.origin;
-    const DAILY_ROAD_MIN = 7;
-    const DAILY_ROAD_MAX = 8;
-    const DAILY_CROSS_MIN = 6;
-    const DAILY_CROSS_MAX = 7;
+    const DAILY_ROAD = 8;
+    const DAILY_CROSS = 7;
     let currentUser = null;
     let weekKey = '';
     let allResources = [];
@@ -255,7 +280,7 @@
     const loginPassword = document.getElementById('loginPassword');
     const loginError = document.getElementById('loginError');
     const logoutBtn = document.getElementById('logoutBtn');
-    const drawBtn = document.getElementById('drawBtn');
+    const drawWeekBtn = document.getElementById('drawWeekBtn');
     const resetBtn = document.getElementById('resetBtn');
     const exportBtn = document.getElementById('exportBtn');
     const adminToggleBtn = document.getElementById('adminToggleBtn');
@@ -295,7 +320,15 @@
     const summaryStartDate = document.getElementById('summaryStartDate');
     const summaryEndDate = document.getElementById('summaryEndDate');
     const summaryFilterBtn = document.getElementById('summaryFilterBtn');
-    const summaryExportBtn = document.getElementById('summaryExportBtn');
+
+    // 导出
+    const exportAllAssessments = document.getElementById('exportAllAssessments');
+    const exportTodayAssessments = document.getElementById('exportTodayAssessments');
+    const exportSingleDate = document.getElementById('exportSingleDate');
+    const exportDateAssessments = document.getElementById('exportDateAssessments');
+    const exportAllDrawRecords = document.getElementById('exportAllDrawRecords');
+    const exportDrawDate = document.getElementById('exportDrawDate');
+    const exportDateDrawRecords = document.getElementById('exportDateDrawRecords');
 
     // Tab切换
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -332,30 +365,28 @@
         mainContainer.classList.add('hidden');
     }
 
-function showMain() {
-    loginContainer.classList.add('hidden');
-    mainContainer.classList.remove('hidden');
-    if (currentUser) {
-        currentUserSpan.textContent = '👤 ' + currentUser.username;
-        
-        // ===== 根据角色显示/隐藏抽取按钮 =====
-        const drawBtn = document.getElementById('drawBtn');
-        if (currentUser.role === 'admin') {
-            drawBtn.style.display = 'inline-flex';
-            adminToggleBtn.classList.remove('hidden');
-            const end = new Date();
-            const start = new Date();
-            start.setDate(start.getDate() - 30);
-            summaryStartDate.value = start.toISOString().slice(0, 10);
-            summaryEndDate.value = end.toISOString().slice(0, 10);
-        } else {
-            drawBtn.style.display = 'none';
-            adminToggleBtn.classList.add('hidden');
-            adminPanel.classList.add('hidden');
+    function showMain() {
+        loginContainer.classList.add('hidden');
+        mainContainer.classList.remove('hidden');
+        if (currentUser) {
+            currentUserSpan.textContent = '👤 ' + currentUser.username;
+            
+            if (currentUser.role === 'admin') {
+                drawWeekBtn.style.display = 'inline-flex';
+                adminToggleBtn.classList.remove('hidden');
+                const end = new Date();
+                const start = new Date();
+                start.setDate(start.getDate() - 30);
+                summaryStartDate.value = start.toISOString().slice(0, 10);
+                summaryEndDate.value = end.toISOString().slice(0, 10);
+            } else {
+                drawWeekBtn.style.display = 'none';
+                adminToggleBtn.classList.add('hidden');
+                adminPanel.classList.add('hidden');
+            }
         }
+        drawInfo.textContent = '📌 整周: 每天路段8个 + 路口7个';
     }
-    drawInfo.textContent = '📌 每日: 路段7-8个 + 路口6-7个';
-}
 
     async function doLogin() {
         const username = loginUsername.value.trim();
@@ -449,7 +480,6 @@ function showMain() {
             return;
         }
 
-        // 按日期排序
         const sortedDates = Object.keys(groupedRecords).sort();
         let html = '';
         sortedDates.forEach(date => {
@@ -470,29 +500,30 @@ function showMain() {
         tableBody.innerHTML = html;
     }
 
-    // ===== 抽取 =====
-    async function doDraw() {
-        drawBtn.disabled = true;
-        drawBtn.textContent = '⏳ 抽取中...';
-        const roadCount = Math.floor(Math.random() * (DAILY_ROAD_MAX - DAILY_ROAD_MIN + 1)) + DAILY_ROAD_MIN;
-        const crossCount = Math.floor(Math.random() * (DAILY_CROSS_MAX - DAILY_CROSS_MIN + 1)) + DAILY_CROSS_MIN;
+    // ===== 批量抽取整周 =====
+    async function doDrawWeek() {
+        drawWeekBtn.disabled = true;
+        drawWeekBtn.textContent = '⏳ 抽取中...';
         try {
-            const resp = await fetch(API_BASE + '/api/draw', {
+            const resp = await fetch(API_BASE + '/api/draw-week', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ weekKey, roadCount, crossCount })
+                body: JSON.stringify({ weekKey })
             });
             const result = await resp.json();
             if (result.success) {
-                alert('✅ ' + result.message);
+                let detailMsg = result.dailyStats.map(d => 
+                    d.date + '(' + d.dayOfWeek + '): ' + d.count + '个'
+                ).join('\n');
+                alert('✅ ' + result.message + '\n\n📋 每日详情：\n' + detailMsg);
                 await loadData();
             } else {
                 alert('⚠️ ' + result.message);
             }
-        } catch (e) { alert('❌ 抽取失败'); }
+        } catch (e) { alert('❌ 抽取失败：' + e.message); }
         finally {
-            drawBtn.disabled = false;
-            drawBtn.textContent = '🎲 抽取今日测评';
+            drawWeekBtn.disabled = false;
+            drawWeekBtn.textContent = '🎲 抽取整周';
         }
     }
 
@@ -518,6 +549,64 @@ function showMain() {
         link.download = '测评抽取_' + weekKey + '.csv';
         link.click();
         URL.revokeObjectURL(link.href);
+    }
+
+    // ===== 导出功能 =====
+    async function exportAssessments(params, filename) {
+        try {
+            const url = new URL(API_BASE + '/api/admin/export-assessments');
+            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+            const resp = await fetch(url, { credentials: 'include' });
+            if (!resp.ok) throw new Error('导出失败');
+            const data = await resp.json();
+            if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
+            
+            const headers = ['序号', '类型', '名称', '责任人', '测评人', '测评日期', '遵章率', '备注'];
+            const rows = data.map((row, idx) => {
+                return [idx + 1, row.type === 'road' ? '路段' : '路口', row.name || '', row.responsible || '', row.evaluator || '', row.assessment_date || '', row.compliance_rate || row.compliance_rate_non || row.compliance_rate_cross || '', row.remark || ''];
+            });
+            const wsData = [headers].concat(rows);
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '测评数据');
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/octet-stream' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename || '测评数据_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+            link.click();
+            URL.revokeObjectURL(link.href);
+        } catch (e) { alert('❌ 导出失败：' + e.message); }
+    }
+
+    async function exportDrawRecords(params, filename) {
+        try {
+            const url = new URL(API_BASE + '/api/admin/export-draw-records');
+            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+            const resp = await fetch(url, { credentials: 'include' });
+            if (!resp.ok) throw new Error('导出失败');
+            const data = await resp.json();
+            if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
+            
+            const headers = ['序号', '日期', '周几', '编号', '名称', '类型', '责任人'];
+            const dayMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const rows = data.map((row, idx) => {
+                const d = new Date(row.draw_date + 'T00:00:00');
+                const day = dayMap[d.getDay()];
+                return [idx + 1, row.draw_date, day, row.id, row.name, row.type_label, row.responsible];
+            });
+            const wsData = [headers].concat(rows);
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '抽取记录');
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/octet-stream' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename || '抽取记录_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+            link.click();
+            URL.revokeObjectURL(link.href);
+        } catch (e) { alert('❌ 导出失败：' + e.message); }
     }
 
     // ===== 用户管理 =====
@@ -662,39 +751,37 @@ function showMain() {
         }
     }
 
-    async function exportSummary(startDate, endDate) {
-        var url = API_BASE + '/api/admin/export-assessments';
-        var params = new URLSearchParams();
-        if (startDate) params.append('startDate', startDate);
-        if (endDate) params.append('endDate', endDate);
-        if (params.toString()) url += '?' + params.toString();
-        try {
-            var resp = await fetch(url, { credentials: 'include' });
-            if (!resp.ok) throw new Error('导出失败');
-            var data = await resp.json();
-            if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
-            var headers = ['序号', '类型', '名称', '责任人', '测评人', '测评日期', '遵章率', '备注'];
-            var rows = data.map(function(row, idx) {
-                return [idx + 1, row.type === 'road' ? '路段' : '路口', row.name || '', row.responsible || '', row.evaluator || '', row.assessment_date || '', row.compliance_rate || row.compliance_rate_non || row.compliance_rate_cross || '', row.remark || ''];
-            });
-            var wsData = [headers].concat(rows);
-            var ws = XLSX.utils.aoa_to_sheet(wsData);
-            var wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, '测评汇总');
-            var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            var blob = new Blob([wbout], { type: 'application/octet-stream' });
-            var link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = '测评汇总_' + new Date().toISOString().slice(0, 10) + '.xlsx';
-            link.click();
-            URL.revokeObjectURL(link.href);
-        } catch (e) { alert('❌ 导出失败'); }
-    }
-
     // ===== 测评按钮 =====
     assessmentBtn.addEventListener('click', function() {
         var username = currentUser ? currentUser.username : 'admin';
         window.open('/assessment.html?user=' + encodeURIComponent(username), '_blank');
+    });
+
+    // ===== 导出事件绑定 =====
+    exportAllAssessments.addEventListener('click', function() {
+        exportAssessments({}, '全部测评数据.xlsx');
+    });
+
+    exportTodayAssessments.addEventListener('click', function() {
+        const today = new Date().toISOString().slice(0, 10);
+        exportAssessments({ startDate: today, endDate: today }, '今日测评数据_' + today + '.xlsx');
+    });
+
+    exportDateAssessments.addEventListener('click', function() {
+        const date = exportSingleDate.value;
+        if (!date) { alert('请先选择日期'); return; }
+        exportAssessments({ startDate: date, endDate: date }, '测评数据_' + date + '.xlsx');
+    });
+
+    exportAllDrawRecords.addEventListener('click', function() {
+        const week = getWeekKey();
+        exportDrawRecords({ weekKey: week }, '本周抽取记录_' + week + '.xlsx');
+    });
+
+    exportDateDrawRecords.addEventListener('click', function() {
+        const date = exportDrawDate.value;
+        if (!date) { alert('请先选择日期'); return; }
+        exportDrawRecords({ drawDate: date }, '抽取记录_' + date + '.xlsx');
     });
 
     // ===== 事件绑定 =====
@@ -702,7 +789,7 @@ function showMain() {
     loginUsername.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
     loginPassword.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
     logoutBtn.addEventListener('click', doLogout);
-    drawBtn.addEventListener('click', doDraw);
+    drawWeekBtn.addEventListener('click', doDrawWeek);
     resetBtn.addEventListener('click', doReset);
     exportBtn.addEventListener('click', doExport);
     adminToggleBtn.addEventListener('click', function() {
@@ -716,7 +803,6 @@ function showMain() {
     refreshLogsBtn.addEventListener('click', loadLogs);
     refreshResourcesBtn.addEventListener('click', function() { loadResourceList(); loadResourcesInfo(); });
     summaryFilterBtn.addEventListener('click', function() { loadSummary(summaryStartDate.value, summaryEndDate.value); });
-    summaryExportBtn.addEventListener('click', function() { exportSummary(summaryStartDate.value, summaryEndDate.value); });
 
     // ===== 启动 =====
     checkAuth();
