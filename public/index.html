@@ -513,7 +513,7 @@
             const result = await resp.json();
             if (result.success) {
                 let detailMsg = result.dailyStats.map(d => 
-                    d.date + '(' + d.dayOfWeek + '): ' + d.count + '个'
+                    d.date + '(' + d.dayOfWeek + '): ' + d.total + '个'
                 ).join('\n');
                 alert('✅ ' + result.message + '\n\n📋 每日详情：\n' + detailMsg);
                 await loadData();
@@ -806,7 +806,7 @@
 
     // ===== 启动 =====
     checkAuth();
-
+    // 已关闭自动刷新 - 用户可手动刷新页面或点击"重新加载数据"按钮
 })();
 </script>
 </body>
