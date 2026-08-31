@@ -282,7 +282,7 @@ app.get('/api/active-plan', requireAuth, (req, res) => {
 app.get('/api/records/:weekKey', requireAuth, (req, res) => {
     const { weekKey } = req.params;
     db.all(
-        `SELECT r.*, dr.draw_date, dr.week_key 
+        `SELECT r.*, dr.draw_date, dr.week_key, dr.assigned_to
          FROM draw_records dr 
          JOIN resources r ON dr.resource_id = r.id 
          WHERE dr.week_key = ? 
@@ -308,7 +308,7 @@ app.get('/api/records/:weekKey', requireAuth, (req, res) => {
     );
 });
 
-// ============ 获取当前用户今日抽取 ============
+// ============ 获取当前用户今日抽取（按 assigned_to 查找） ============
 app.get('/api/my-today-draw', requireAuth, (req, res) => {
     const username = req.session.user.username;
     const todayStr = getTodayChina();
@@ -316,11 +316,11 @@ app.get('/api/my-today-draw', requireAuth, (req, res) => {
 
     db.all(
         `SELECT dr.resource_id, r.name, r.type, r.type_label, r.responsible, r.camera, r.area,
-                dr.draw_date
+                dr.draw_date, dr.assigned_to
          FROM draw_records dr
          JOIN resources r ON dr.resource_id = r.id
          WHERE dr.week_key = ?
-           AND r.responsible = ?
+           AND dr.assigned_to = ?
            AND dr.draw_date = ?
          ORDER BY r.type DESC, dr.draw_date`,
         [weekKey, username, todayStr],
@@ -407,7 +407,7 @@ app.get('/api/week-participants', requireAuth, (req, res) => {
     );
 });
 
-// ============ 均衡抽取整周（无责任人版本） ============
+// ============ 均衡抽取整周（无责任人版本，记录 assigned_to） ============
 app.post('/api/draw-week', requireAuth, (req, res) => {
     const { weekKey, planKey } = req.body;
     const username = req.session.user.username;
@@ -527,10 +527,21 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                 });
 
                 // ============================================================
-                // 生成抽取记录 - 分配到5天
+                // 生成抽取记录 - 分配到5天，记录 assigned_to
                 // ============================================================
                 const allRecords = [];
                 const dailyStats = [];
+
+                // 收集所有资源及其分配的用户
+                const resourceToUser = {};
+                userAssignments.forEach(a => {
+                    a.crosses.forEach(c => {
+                        resourceToUser[c.id] = a.username;
+                    });
+                    a.roads.forEach(r => {
+                        resourceToUser[r.id] = a.username;
+                    });
+                });
 
                 let allCrossesToAssign = [];
                 let allRoadsToAssign = [];
@@ -573,14 +584,16 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                         dayRecords.push({
                             resource_id: cross.id,
                             draw_date: date,
-                            week_key: weekKey
+                            week_key: weekKey,
+                            assigned_to: resourceToUser[cross.id] || ''
                         });
                     });
                     dayRoads.forEach(road => {
                         dayRecords.push({
                             resource_id: road.id,
                             draw_date: date,
-                            week_key: weekKey
+                            week_key: weekKey,
+                            assigned_to: resourceToUser[road.id] || ''
                         });
                     });
 
@@ -601,10 +614,12 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
 
                 db.serialize(() => {
                     db.run('BEGIN TRANSACTION');
-                    const stmt = db.prepare('INSERT INTO draw_records (resource_id, draw_date, week_key) VALUES (?, ?, ?)');
+                    const stmt = db.prepare(
+                        'INSERT INTO draw_records (resource_id, draw_date, week_key, assigned_to) VALUES (?, ?, ?, ?)'
+                    );
 
                     allRecords.forEach(record => {
-                        stmt.run(record.resource_id, record.draw_date, record.week_key);
+                        stmt.run(record.resource_id, record.draw_date, record.week_key, record.assigned_to);
                     });
 
                     stmt.finalize();
