@@ -308,7 +308,7 @@ app.get('/api/records/:weekKey', requireAuth, (req, res) => {
     );
 });
 
-// ============ 获取当前用户今日抽取（按 assigned_to 查找） ============
+// ============ 获取当前用户今日抽取 ============
 app.get('/api/my-today-draw', requireAuth, (req, res) => {
     const username = req.session.user.username;
     const todayStr = getTodayChina();
@@ -407,7 +407,7 @@ app.get('/api/week-participants', requireAuth, (req, res) => {
     );
 });
 
-// ============ 均衡抽取整周（无责任人版本，记录 assigned_to） ============
+// ============ 均衡抽取整周（带优先少分用户） ============
 app.post('/api/draw-week', requireAuth, (req, res) => {
     const { weekKey, planKey } = req.body;
     const username = req.session.user.username;
@@ -428,7 +428,6 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
             });
         }
 
-        // 获取参与用户
         db.all('SELECT username, is_participating FROM user_participants WHERE week_key = ?', [weekKey], (err, participantRows) => {
             if (err) return res.status(500).json({ error: err.message });
 
@@ -448,99 +447,150 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
     });
 
     function doDraw(activeUsers) {
-        // 获取当前激活方案
         db.get('SELECT plan_key FROM resource_plans WHERE is_active = 1', (err, planRow) => {
             if (err) return res.status(500).json({ error: err.message });
             const currentPlan = planRow ? planRow.plan_key : 'plan_a';
 
-            // 获取该方案下的所有资源（不过滤责任人）
             db.all('SELECT * FROM resources WHERE plan_key = ?', [currentPlan], (err, allResources) => {
                 if (err) return res.status(500).json({ error: err.message });
 
                 const roads = allResources.filter(r => r.type === 'road');
                 const crosses = allResources.filter(r => r.type === 'cross');
 
-                // 随机打乱
                 const shuffledRoads = roads.sort(() => Math.random() - 0.5);
                 const shuffledCrosses = crosses.sort(() => Math.random() - 0.5);
 
                 const userCount = activeUsers.length;
                 const totalCrosses = shuffledCrosses.length;
                 const totalRoads = shuffledRoads.length;
-
-                // 工作量：路口=1.0，路段=0.5
                 const totalWork = totalCrosses * 1.0 + totalRoads * 0.5;
                 const avgWork = totalWork / userCount;
 
-                // 每个用户分配结果
-                const userAssignments = activeUsers.map(user => ({
+                // ===== 指定"优先少分"用户 =====
+                const priorityLowUsers = ['李佳', '佟璘', '赵鑫宇', '肖阳', '吴达'];
+                
+                const lowPriorityUsers = [];
+                const normalUsers = [];
+                activeUsers.forEach(user => {
+                    if (priorityLowUsers.includes(user)) {
+                        lowPriorityUsers.push(user);
+                    } else {
+                        normalUsers.push(user);
+                    }
+                });
+
+                const sortedUsers = [...normalUsers, ...lowPriorityUsers];
+                const normalCount = normalUsers.length;
+                const lowCount = lowPriorityUsers.length;
+                
+                let userTargets = {};
+                if (normalCount === 0) {
+                    sortedUsers.forEach(user => {
+                        userTargets[user] = avgWork;
+                    });
+                } else {
+                    // ===== 优先少分用户目标：avgWork 的 50%，最低 0.5 =====
+                    const lowTarget = Math.min(Math.max(avgWork * 0.5, 0.5), 1.0);
+                    
+                    const lowTotalWork = lowCount * lowTarget;
+                    const normalTotalWork = totalWork - lowTotalWork;
+                    const normalTarget = normalTotalWork / normalCount;
+                    
+                    sortedUsers.forEach(user => {
+                        if (priorityLowUsers.includes(user)) {
+                            userTargets[user] = lowTarget;
+                        } else {
+                            userTargets[user] = normalTarget;
+                        }
+                    });
+                }
+
+                const userAssignments = sortedUsers.map(user => ({
                     username: user,
                     crossCount: 0,
                     roadCount: 0,
                     totalWork: 0,
                     crosses: [],
-                    roads: []
+                    roads: [],
+                    targetWork: userTargets[user] || avgWork
                 }));
 
-                // 分配路口（权重1.0）
+                // ===== 分配路口 =====
                 let crossIndex = 0;
-                while (crossIndex < shuffledCrosses.length) {
+                let round = 0;
+                const maxRounds = 30;
+                
+                while (crossIndex < shuffledCrosses.length && round < maxRounds) {
+                    round++;
                     for (let u = 0; u < userAssignments.length && crossIndex < shuffledCrosses.length; u++) {
-                        if (userAssignments[u].totalWork >= avgWork + 0.5) continue;
+                        const target = userAssignments[u].targetWork;
+                        if (userAssignments[u].totalWork >= target + 0.2) continue;
                         userAssignments[u].crosses.push(shuffledCrosses[crossIndex]);
                         userAssignments[u].crossCount++;
                         userAssignments[u].totalWork += 1.0;
                         crossIndex++;
                     }
-                    if (crossIndex > 0 && userAssignments.every(u => u.totalWork >= avgWork)) break;
+                    if (crossIndex < shuffledCrosses.length && userAssignments.every(u => u.totalWork >= u.targetWork)) {
+                        for (let u = 0; u < userAssignments.length && crossIndex < shuffledCrosses.length; u++) {
+                            userAssignments.sort((a, b) => a.totalWork - b.totalWork);
+                            const idx = userAssignments.findIndex(a => !priorityLowUsers.includes(a.username));
+                            if (idx >= 0 && userAssignments[idx].totalWork < avgWork + 0.8) {
+                                userAssignments[idx].crosses.push(shuffledCrosses[crossIndex]);
+                                userAssignments[idx].crossCount++;
+                                userAssignments[idx].totalWork += 1.0;
+                                crossIndex++;
+                            } else {
+                                userAssignments[u % userAssignments.length].crosses.push(shuffledCrosses[crossIndex]);
+                                userAssignments[u % userAssignments.length].crossCount++;
+                                userAssignments[u % userAssignments.length].totalWork += 1.0;
+                                crossIndex++;
+                            }
+                        }
+                    }
                 }
 
-                // 分配路段（权重0.5）
+                // ===== 分配路段 =====
                 let roadIndex = 0;
-                while (roadIndex < shuffledRoads.length) {
+                round = 0;
+                while (roadIndex < shuffledRoads.length && round < maxRounds) {
+                    round++;
                     for (let u = 0; u < userAssignments.length && roadIndex < shuffledRoads.length; u++) {
-                        if (userAssignments[u].totalWork >= avgWork + 0.5) continue;
+                        const target = userAssignments[u].targetWork;
+                        if (userAssignments[u].totalWork >= target + 0.2) continue;
                         userAssignments[u].roads.push(shuffledRoads[roadIndex]);
                         userAssignments[u].roadCount++;
                         userAssignments[u].totalWork += 0.5;
                         roadIndex++;
                     }
-                    if (roadIndex > 0 && userAssignments.every(u => u.totalWork >= avgWork)) break;
+                    if (roadIndex < shuffledRoads.length && userAssignments.every(u => u.totalWork >= u.targetWork)) {
+                        for (let u = 0; u < userAssignments.length && roadIndex < shuffledRoads.length; u++) {
+                            userAssignments.sort((a, b) => a.totalWork - b.totalWork);
+                            const idx = userAssignments.findIndex(a => !priorityLowUsers.includes(a.username));
+                            if (idx >= 0 && userAssignments[idx].totalWork < avgWork + 0.8) {
+                                userAssignments[idx].roads.push(shuffledRoads[roadIndex]);
+                                userAssignments[idx].roadCount++;
+                                userAssignments[idx].totalWork += 0.5;
+                                roadIndex++;
+                            } else {
+                                userAssignments[u % userAssignments.length].roads.push(shuffledRoads[roadIndex]);
+                                userAssignments[u % userAssignments.length].roadCount++;
+                                userAssignments[u % userAssignments.length].totalWork += 0.5;
+                                roadIndex++;
+                            }
+                        }
+                    }
                 }
 
-                // 剩余资源分配给工作量最少的人
-                const remainingCrosses = shuffledCrosses.slice(crossIndex);
-                const remainingRoads = shuffledRoads.slice(roadIndex);
-
-                remainingCrosses.forEach(cross => {
-                    userAssignments.sort((a, b) => a.totalWork - b.totalWork);
-                    userAssignments[0].crosses.push(cross);
-                    userAssignments[0].crossCount++;
-                    userAssignments[0].totalWork += 1.0;
-                });
-
-                remainingRoads.forEach(road => {
-                    userAssignments.sort((a, b) => a.totalWork - b.totalWork);
-                    userAssignments[0].roads.push(road);
-                    userAssignments[0].roadCount++;
-                    userAssignments[0].totalWork += 0.5;
-                });
-
                 // ============================================================
-                // 生成抽取记录 - 分配到5天，记录 assigned_to
+                // 生成抽取记录
                 // ============================================================
                 const allRecords = [];
                 const dailyStats = [];
 
-                // 收集所有资源及其分配的用户
                 const resourceToUser = {};
                 userAssignments.forEach(a => {
-                    a.crosses.forEach(c => {
-                        resourceToUser[c.id] = a.username;
-                    });
-                    a.roads.forEach(r => {
-                        resourceToUser[r.id] = a.username;
-                    });
+                    a.crosses.forEach(c => { resourceToUser[c.id] = a.username; });
+                    a.roads.forEach(r => { resourceToUser[r.id] = a.username; });
                 });
 
                 let allCrossesToAssign = [];
@@ -631,13 +681,14 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
 
                         const totalCount = allRecords.length;
                         logOperation(username, '批量抽取整周',
-                            `共${totalCount}条记录，${userCount}人参与，方案: ${currentPlan}`,
+                            `共${totalCount}条记录，${userAssignments.length}人参与，方案: ${currentPlan}`,
                             ip
                         );
 
-                        const workReport = userAssignments.map(a =>
-                            `${a.username}: 路口${a.crossCount}个(权重1) + 路段${a.roadCount}个(权重0.5) = ${a.totalWork.toFixed(1)}`
-                        ).join(' | ');
+                        const workReport = userAssignments.map(a => {
+                            const isLow = priorityLowUsers.includes(a.username);
+                            return `${a.username}${isLow ? ' (少分)' : ''}: 路口${a.crossCount}个 + 路段${a.roadCount}个 = ${a.totalWork.toFixed(1)}`;
+                        }).join(' | ');
 
                         const detailMsg = dailyStats.map(d =>
                             d.date + '(' + d.dayOfWeek + '): 路段' + d.roadCount + '个 + 路口' + d.crossCount + '个 = ' + d.total + '个'
@@ -653,7 +704,8 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                                 username: a.username,
                                 crossCount: a.crossCount,
                                 roadCount: a.roadCount,
-                                totalWork: a.totalWork
+                                totalWork: a.totalWork,
+                                isLowPriority: priorityLowUsers.includes(a.username)
                             })),
                             planKey: currentPlan
                         });
