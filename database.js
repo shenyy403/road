@@ -174,7 +174,7 @@ db.serialize(() => {
       db.run('INSERT INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
         ['plan_a', '方案A（70个资源）', 1]);
       db.run('INSERT INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
-        ['plan_b', '方案B（44个资源）', 0]);
+        ['plan_b', '方案B（42个资源：8路段 + 34路口）', 0]);
     }
   });
 
@@ -196,7 +196,7 @@ function initDefaultResources() {
   db.run('INSERT OR IGNORE INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
     ['plan_a', '方案A（70个资源）', 1]);
   db.run('INSERT OR IGNORE INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
-    ['plan_b', '方案B（44个资源）', 0]);
+    ['plan_b', '方案B（42个资源：8路段 + 34路口）', 0]);
 
   const allResources = [];
 
@@ -204,7 +204,6 @@ function initDefaultResources() {
   // 路口数据 (C1~C34) - 两套方案共用
   // ============================================================
   const crossData = [
-    // 格式: { id, name(摄像头名), camera(路段名称), area(区域) }
     { id: 'C1', name: '锦兴路成都街151', camera: '锦兴路成都街', area: '高新区' },
     { id: 'C2', name: '成都街与锦兴路交叉口卡口—YD2', camera: '锦兴路成都街', area: '高新区' },
     { id: 'C3', name: '解放路士英街102', camera: '解放路士英街', area: '古塔区' },
@@ -241,7 +240,7 @@ function initDefaultResources() {
     { id: 'C34', name: '解放路云飞南街北侧', camera: '解放路云飞街', area: '凌河区' }
   ];
 
-  // 路口责任人分配（34个路口分配给25个用户，平均每人1-2个）
+  // 路口责任人分配（34个路口，每人1-2个）
   const crossResponsibles = [
     '韩江', '关鑫', '王鑫', '王鼎群', '付彧', '田丰',
     '刘添睿', '刘嘉伦', '关丽丽', '孙昱', '毕世伟', '李松',
@@ -251,6 +250,7 @@ function initDefaultResources() {
     '刘添睿', '刘嘉伦', '关丽丽', '孙昱'
   ];
 
+  // 方案A的路口（plan_a）
   crossData.forEach((d, i) => {
     allResources.push({
       id: d.id,
@@ -260,9 +260,12 @@ function initDefaultResources() {
       responsible: crossResponsibles[i % crossResponsibles.length],
       area: d.area,
       camera: d.camera,
-      plan_key: 'plan_a'  // 路口同时属于两套方案，用 plan_a 标识
+      plan_key: 'plan_a'
     });
-    // 方案B也包含所有路口
+  });
+
+  // 方案B的路口（plan_b）
+  crossData.forEach((d, i) => {
     allResources.push({
       id: d.id + '_b',
       name: d.name,
@@ -279,7 +282,6 @@ function initDefaultResources() {
   // 方案A - 36个路段
   // ============================================================
   const roadDataA = [
-    // 格式: { id, name(路段名称), camera(摄像头名), area(区域) }
     { id: 'R1', name: '凌川路', camera: '凌川桥桥南头142', area: '松山区' },
     { id: 'R2', name: '成都街', camera: '锦兴路-成都街-五期', area: '松山区' },
     { id: 'R3', name: '松坡路', camera: '松坡路3段-24号楼-四期', area: '凌河区' },
@@ -318,7 +320,7 @@ function initDefaultResources() {
     { id: 'R36', name: '重庆路', camera: '重庆路新制街369', area: '凌河区' }
   ];
 
-  // 路段责任人分配（36个路段分配给25个用户）
+  // 路段责任人分配
   const roadResponsibles = [
     '韩江', '关鑫', '王鑫', '王鼎群', '付彧', '田丰',
     '刘添睿', '刘嘉伦', '关丽丽', '孙昱', '毕世伟', '李松',
@@ -342,17 +344,15 @@ function initDefaultResources() {
   });
 
   // ============================================================
-  // 方案B - 9个路段
+  // 方案B - 8个路段（已去掉"市府路路口北侧东西方向斑马线"）
   // ============================================================
   const roadDataB = [
-    // 格式: { id, name(路段名称), camera(摄像头名), area(区域) }
     { id: 'R2', name: '典逸新洲东门斑马线', camera: '锦兴路-成都街-五期', area: '松山区' },
     { id: 'R8', name: '太平街路口南100米斑马线', camera: '凌西大街太平街00204', area: '太和区' },
     { id: 'R10', name: '洛阳路南侧200米斑马线', camera: '中央街洛阳路00333', area: '凌河区' },
     { id: 'R16', name: '回民小学门前斑马线', camera: '士英街金缘路0054', area: '古塔区' },
     { id: 'R21', name: '石油公司门前斑马线', camera: '解放路汉口街00138', area: '古塔区' },
     { id: 'R23', name: '天鹅堡门前西侧100米斑马线', camera: '科技路云飞街西00420', area: '松山区' },
-    { id: 'R32', name: '市府路路口北侧东西方向斑马线', camera: '市府路-昆明街-六期', area: '松山区' },
     { id: 'R33', name: '锦绣前程南宁路路口北100米斑马线', camera: '南宁路山西街173', area: '古塔区' },
     { id: 'R36', name: '新制街路口东200米斑马线', camera: '重庆路新制街369', area: '凌河区' }
   ];
@@ -360,7 +360,7 @@ function initDefaultResources() {
   // 方案B路段责任人
   const roadResponsiblesB = [
     '关鑫', '刘嘉伦', '孙昱', '佟璘', '金晓宇',
-    '徐嘉璐', '关鑫', '王鑫', '田丰'
+    '徐嘉璐', '王鑫', '田丰'
   ];
 
   roadDataB.forEach((d, i) => {
@@ -391,7 +391,7 @@ function initDefaultResources() {
 
   console.log(`✅ 资源初始化完成:`);
   console.log(`   - 方案A: 70个资源 (36路段 + 34路口)`);
-  console.log(`   - 方案B: 43个资源 (9路段 + 34路口)`);
+  console.log(`   - 方案B: 42个资源 (8路段 + 34路口)`);
   console.log(`   - 总计: ${allResources.length} 条记录`);
 }
 
