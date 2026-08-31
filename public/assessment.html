@@ -107,7 +107,7 @@
                         <th style="min-width:70px;">礼让率</th>
                         <th style="min-width:90px;">路口违法<br>车辆数</th>
                         <th style="min-width:60px;">测评人</th>
-                        <th style="min-width:80px;">测评人备注</th>
+                        <th style="min-width:80px;">备注</th>
                     </tr>
                 </thead>
                 <tbody id="crossBody"></tbody>
@@ -139,6 +139,7 @@
                         <th style="min-width:80px;">未礼让数</th>
                         <th style="min-width:110px;">遵章率<br>(斑马线)</th>
                         <th style="min-width:60px;">测评人</th>
+                        <th style="min-width:80px;">备注</th>
                     </tr>
                 </thead>
                 <tbody id="roadBody"></tbody>
@@ -259,7 +260,7 @@
     }
 
     function createEmptyRoadRow(index, shift) {
-        return { type: 'road', row_index: index, paixu: shift === '早班' ? '早' : '晚', name: '', device: '', time_start: '', time_end: '', non_motor_total: '', wrong_lane_count: '', compliance_rate_non: '', parking_violation: '', jaywalk_count: '', crosswalk_total: '', no_yield_cross: '', compliance_rate_cross: '', evaluator: '', isAutoFilled: false, shift: shift };
+        return { type: 'road', row_index: index, paixu: shift === '早班' ? '早' : '晚', name: '', device: '', time_start: '', time_end: '', non_motor_total: '', wrong_lane_count: '', compliance_rate_non: '', parking_violation: '', jaywalk_count: '', crosswalk_total: '', no_yield_cross: '', compliance_rate_cross: '', evaluator: '', remark: '', isAutoFilled: false, shift: shift };
     }
 
     function calcCrossTotal(row) {
@@ -290,7 +291,7 @@
         return total === 0 ? '' : ((total - noYield) / total * 100);
     }
 
-    // ===== renderCrossTable - 每个路口2行（早班/晚班） =====
+    // ===== renderCrossTable =====
     function renderCrossTable(drawData, savedData) {
         crossBody.innerHTML = '';
         const drawCrosses = drawData?.cross || [];
@@ -417,7 +418,7 @@
         crossCount.textContent = `${drawCrosses.length * 2} 行（${drawCrosses.length}个路口 × 2班次）`;
     }
 
-    // ===== renderRoadTable - 每个路段2行（早班/晚班） =====
+    // ===== renderRoadTable =====
     function renderRoadTable(drawData, savedData) {
         roadBody.innerHTML = '';
         const drawRoads = drawData?.road || [];
@@ -430,7 +431,7 @@
         const SHIFTS = ['早班', '晚班'];
         
         if (drawRoads.length === 0) {
-            roadBody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:20px;color:#999;">📭 今日暂无您负责的路段被抽取</td></tr>';
+            roadBody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:#999;">📭 今日暂无您负责的路段被抽取</td></tr>';
             roadCount.textContent = '0 行';
             roadFillInfo.textContent = '📌 自动填入 0 行';
             return;
@@ -461,6 +462,7 @@
                         no_yield_cross: savedItem.no_yield_cross || '',
                         compliance_rate_cross: savedItem.compliance_rate_cross || '',
                         evaluator: savedItem.evaluator || currentUser,
+                        remark: savedItem.remark || '',
                         isAutoFilled: false,
                         shift: shift
                     };
@@ -482,6 +484,7 @@
                         no_yield_cross: '',
                         compliance_rate_cross: '',
                         evaluator: currentUser,
+                        remark: '',
                         isAutoFilled: true,
                         shift: shift
                     };
@@ -515,6 +518,7 @@
                     <td><input type="number" class="road-noYield" value="${row.no_yield_cross || ''}" min="0"></td>
                     <td class="formula-cell"><input type="text" class="road-complianceCross" value="${compCross !== '' ? compCross.toFixed(1) + '%' : ''}" readonly></td>
                     <td class="${autoClass}"><input type="text" class="road-evaluator" value="${row.evaluator || ''}" placeholder=""></td>
+                    <td><input type="text" class="road-remark" value="${row.remark || ''}" placeholder=""></td>
                 `;
                 roadBody.appendChild(tr);
                 rowIndex++;
@@ -586,7 +590,7 @@
                 yield_rate: '', 
                 illegal_count: '', 
                 evaluator: get('.road-evaluator') || currentUser, 
-                remark: '', 
+                remark: get('.road-remark') || '', 
                 non_motor_total: get('.road-nonMotorTotal'), 
                 wrong_lane_count: get('.road-wrongLane'), 
                 compliance_rate_non: get('.road-complianceNon'), 
@@ -667,8 +671,8 @@
         const crossHeaders = ['班次', '测评点位', '摄像头位置', '路口方向', '开始时间', '结束时间', '非机动车行人数', '逆行', '闯红灯', '越线停车', '行人不走斑马线', '其他', '合计', '非机动车行人遵章率', '右转弯机动车数量', '未礼让数量', '礼让率', '路口违法车辆数', '测评人', '测评人备注'];
         const crossRows = crossData.map(r => [r.paixu, r.name, r.camera, r.direction, r.time_start, r.time_end, r.non_motor_count, r.reverse_count, r.red_light_count, r.stop_line_count, r.no_crosswalk_count, r.other_count, r.total, r.compliance_rate, r.right_turn_count, r.no_yield_count, r.yield_rate, r.illegal_count, r.evaluator, r.remark]);
         const crossSheet = XLSX.utils.aoa_to_sheet([crossHeaders, ...crossRows]);
-        const roadHeaders = ['班次', '路段名称', '视频设备名称', '开始时间', '结束时间', '非机动车通过总数', '走错车道数', '遵章率(非机动车)', '机动车乱停乱放数', '行人乱穿马路数', '斑马线过车总数', '未礼让数', '遵章率(斑马线)', '测评人'];
-        const roadRows = roadData.map(r => [r.paixu, r.name, r.camera, r.time_start, r.time_end, r.non_motor_total, r.wrong_lane_count, r.compliance_rate_non, r.parking_violation, r.jaywalk_count, r.crosswalk_total, r.no_yield_cross, r.compliance_rate_cross, r.evaluator]);
+        const roadHeaders = ['班次', '路段名称', '视频设备名称', '开始时间', '结束时间', '非机动车通过总数', '走错车道数', '遵章率(非机动车)', '机动车乱停乱放数', '行人乱穿马路数', '斑马线过车总数', '未礼让数', '遵章率(斑马线)', '测评人', '备注'];
+        const roadRows = roadData.map(r => [r.paixu, r.name, r.camera, r.time_start, r.time_end, r.non_motor_total, r.wrong_lane_count, r.compliance_rate_non, r.parking_violation, r.jaywalk_count, r.crosswalk_total, r.no_yield_cross, r.compliance_rate_cross, r.evaluator, r.remark]);
         const roadSheet = XLSX.utils.aoa_to_sheet([roadHeaders, ...roadRows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, crossSheet, '路口');
@@ -700,7 +704,6 @@
     resetBtn.addEventListener('click', doReset);
 
     loadAllData();
-    // 已关闭自动刷新，用户手动点击"重新加载数据"按钮刷新
 })();
 </script>
 </body>
