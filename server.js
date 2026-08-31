@@ -61,20 +61,19 @@ function getTodayChina() {
 // ============ 获取本周一到周五的日期 ============
 function getWeekDatesFromToday() {
     const today = new Date();
-    const todayDay = today.getDay(); // 0=周日, 1=周一, ..., 6=周六
-    
-    // 计算本周一
+    const todayDay = today.getDay();
+
     let daysToMonday;
     if (todayDay === 0) {
         daysToMonday = 6;
     } else {
         daysToMonday = todayDay - 1;
     }
-    
+
     const monday = new Date(today);
     monday.setDate(today.getDate() - daysToMonday);
     monday.setHours(0, 0, 0, 0);
-    
+
     const dates = [];
     for (let i = 0; i < 5; i++) {
         const d = new Date(monday);
@@ -265,7 +264,7 @@ app.post('/api/resource-plans/activate', requireAuth, (req, res) => {
     db.serialize(() => {
         db.run('UPDATE resource_plans SET is_active = 0 WHERE is_active = 1');
         db.run('UPDATE resource_plans SET is_active = 1 WHERE plan_key = ?', [planKey]);
-        
+
         logOperation(username, '切换资源方案', `切换到: ${planKey}`, ip);
         res.json({ success: true, planKey: planKey });
     });
@@ -291,7 +290,7 @@ app.get('/api/records/:weekKey', requireAuth, (req, res) => {
         [weekKey],
         (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
-            
+
             const grouped = {};
             rows.forEach(row => {
                 if (!grouped[row.draw_date]) {
@@ -299,7 +298,7 @@ app.get('/api/records/:weekKey', requireAuth, (req, res) => {
                 }
                 grouped[row.draw_date].push(row);
             });
-            
+
             res.json({
                 records: rows,
                 grouped: grouped,
@@ -357,7 +356,7 @@ app.post('/api/week-participants', requireAuth, (req, res) => {
 
     db.serialize(() => {
         db.run('DELETE FROM user_participants WHERE week_key = ?', [weekKey]);
-        
+
         const stmt = db.prepare(
             'INSERT INTO user_participants (week_key, username, is_participating) VALUES (?, ?, ?)'
         );
@@ -365,7 +364,7 @@ app.post('/api/week-participants', requireAuth, (req, res) => {
             stmt.run(weekKey, p.username, p.isParticipating ? 1 : 0);
         });
         stmt.finalize();
-        
+
         logOperation(username, '更新参与用户', `更新了 ${participants.length} 个用户`, ip);
         res.json({ success: true, count: participants.length });
     });
@@ -374,19 +373,19 @@ app.post('/api/week-participants', requireAuth, (req, res) => {
 // ============ 获取参与用户 ============
 app.get('/api/week-participants', requireAuth, (req, res) => {
     const weekKey = getWeekKey();
-    
+
     db.all(
         `SELECT username, is_participating FROM user_participants WHERE week_key = ?`,
         [weekKey],
         (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
-            
+
             if (rows.length === 0) {
                 db.all(
                     `SELECT username FROM users WHERE role = 'user' ORDER BY username`,
                     (err2, users) => {
                         if (err2) return res.status(500).json({ error: err2.message });
-                        res.json({ 
+                        res.json({
                             weekKey: weekKey,
                             participants: users.map(u => ({
                                 username: u.username,
@@ -396,7 +395,7 @@ app.get('/api/week-participants', requireAuth, (req, res) => {
                     }
                 );
             } else {
-                res.json({ 
+                res.json({
                     weekKey: weekKey,
                     participants: rows.map(r => ({
                         username: r.username,
@@ -408,7 +407,7 @@ app.get('/api/week-participants', requireAuth, (req, res) => {
     );
 });
 
-// ============ 均衡抽取整周 ============
+// ============ 均衡抽取整周（无责任人版本） ============
 app.post('/api/draw-week', requireAuth, (req, res) => {
     const { weekKey, planKey } = req.body;
     const username = req.session.user.username;
@@ -419,7 +418,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
     }
 
     const dates = getWeekDatesFromToday();
-    
+
     db.get('SELECT COUNT(*) as count FROM draw_records WHERE week_key = ?', [weekKey], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (row.count > 0) {
@@ -432,7 +431,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
         // 获取参与用户
         db.all('SELECT username, is_participating FROM user_participants WHERE week_key = ?', [weekKey], (err, participantRows) => {
             if (err) return res.status(500).json({ error: err.message });
-            
+
             let activeUsers;
             if (participantRows.length > 0) {
                 activeUsers = participantRows.filter(r => r.is_participating === 1).map(r => r.username);
@@ -453,17 +452,14 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
         db.get('SELECT plan_key FROM resource_plans WHERE is_active = 1', (err, planRow) => {
             if (err) return res.status(500).json({ error: err.message });
             const currentPlan = planRow ? planRow.plan_key : 'plan_a';
-            
-            // 获取该方案下的资源
+
+            // 获取该方案下的所有资源（不过滤责任人）
             db.all('SELECT * FROM resources WHERE plan_key = ?', [currentPlan], (err, allResources) => {
                 if (err) return res.status(500).json({ error: err.message });
 
-                // 只取参与用户对应的资源
-                const userResources = allResources.filter(r => activeUsers.includes(r.responsible));
-                
-                const roads = userResources.filter(r => r.type === 'road');
-                const crosses = userResources.filter(r => r.type === 'cross');
-                
+                const roads = allResources.filter(r => r.type === 'road');
+                const crosses = allResources.filter(r => r.type === 'cross');
+
                 // 随机打乱
                 const shuffledRoads = roads.sort(() => Math.random() - 0.5);
                 const shuffledCrosses = crosses.sort(() => Math.random() - 0.5);
@@ -471,11 +467,11 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                 const userCount = activeUsers.length;
                 const totalCrosses = shuffledCrosses.length;
                 const totalRoads = shuffledRoads.length;
-                
+
                 // 工作量：路口=1.0，路段=0.5
                 const totalWork = totalCrosses * 1.0 + totalRoads * 0.5;
                 const avgWork = totalWork / userCount;
-                
+
                 // 每个用户分配结果
                 const userAssignments = activeUsers.map(user => ({
                     username: user,
@@ -485,7 +481,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                     crosses: [],
                     roads: []
                 }));
-                
+
                 // 分配路口（权重1.0）
                 let crossIndex = 0;
                 while (crossIndex < shuffledCrosses.length) {
@@ -498,7 +494,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                     }
                     if (crossIndex > 0 && userAssignments.every(u => u.totalWork >= avgWork)) break;
                 }
-                
+
                 // 分配路段（权重0.5）
                 let roadIndex = 0;
                 while (roadIndex < shuffledRoads.length) {
@@ -511,18 +507,18 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                     }
                     if (roadIndex > 0 && userAssignments.every(u => u.totalWork >= avgWork)) break;
                 }
-                
+
                 // 剩余资源分配给工作量最少的人
                 const remainingCrosses = shuffledCrosses.slice(crossIndex);
                 const remainingRoads = shuffledRoads.slice(roadIndex);
-                
+
                 remainingCrosses.forEach(cross => {
                     userAssignments.sort((a, b) => a.totalWork - b.totalWork);
                     userAssignments[0].crosses.push(cross);
                     userAssignments[0].crossCount++;
                     userAssignments[0].totalWork += 1.0;
                 });
-                
+
                 remainingRoads.forEach(road => {
                     userAssignments.sort((a, b) => a.totalWork - b.totalWork);
                     userAssignments[0].roads.push(road);
@@ -531,55 +527,47 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                 });
 
                 // ============================================================
-                // 生成抽取记录 - 确保所有资源都被分配到5天
+                // 生成抽取记录 - 分配到5天
                 // ============================================================
                 const allRecords = [];
                 const dailyStats = [];
-                
-                // 收集所有需要分配的资源
+
                 let allCrossesToAssign = [];
                 let allRoadsToAssign = [];
                 userAssignments.forEach(a => {
                     allCrossesToAssign = allCrossesToAssign.concat(a.crosses);
                     allRoadsToAssign = allRoadsToAssign.concat(a.roads);
                 });
-                
-                // 随机打乱，让每天的分配更均匀
+
                 allCrossesToAssign = allCrossesToAssign.sort(() => Math.random() - 0.5);
                 allRoadsToAssign = allRoadsToAssign.sort(() => Math.random() - 0.5);
-                
-                // 计算每天应该分配的路口和路段数量
+
                 const totalCrossesToAssign = allCrossesToAssign.length;
                 const totalRoadsToAssign = allRoadsToAssign.length;
                 const totalDays = dates.length;
-                
-                // 每天基础数量（路口）
+
                 const baseCrossPerDay = Math.floor(totalCrossesToAssign / totalDays);
                 const remainCrosses = totalCrossesToAssign - baseCrossPerDay * totalDays;
-                
-                // 每天基础数量（路段）
+
                 const baseRoadPerDay = Math.floor(totalRoadsToAssign / totalDays);
                 const remainRoads = totalRoadsToAssign - baseRoadPerDay * totalDays;
-                
+
                 let crossIdx = 0;
                 let roadIdx = 0;
-                
+
                 dates.forEach((date, dayIndex) => {
-                    // 计算当天路口数
                     let dayCrossCount = baseCrossPerDay;
                     if (dayIndex < remainCrosses) dayCrossCount++;
-                    
+
                     const dayCrosses = allCrossesToAssign.slice(crossIdx, crossIdx + dayCrossCount);
                     crossIdx += dayCrossCount;
-                    
-                    // 计算当天路段数
+
                     let dayRoadCount = baseRoadPerDay;
                     if (dayIndex < remainRoads) dayRoadCount++;
-                    
+
                     const dayRoads = allRoadsToAssign.slice(roadIdx, roadIdx + dayRoadCount);
                     roadIdx += dayRoadCount;
-                    
-                    // 生成该天的记录
+
                     const dayRecords = [];
                     dayCrosses.forEach(cross => {
                         dayRecords.push({
@@ -595,9 +583,9 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                             week_key: weekKey
                         });
                     });
-                    
+
                     allRecords.push(...dayRecords);
-                    
+
                     dailyStats.push({
                         date: date,
                         dayOfWeek: getDayOfWeek(date),
@@ -606,17 +594,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                         total: dayRecords.length
                     });
                 });
-                
-                // 验证所有资源是否都被分配
-                const totalAssigned = allRecords.length;
-                const expectedTotal = totalCrossesToAssign + totalRoadsToAssign;
-                
-                if (totalAssigned !== expectedTotal) {
-                    console.error(`资源分配不完整！期望 ${expectedTotal}，实际 ${totalAssigned}`);
-                    // 如果有遗漏，补充分配
-                    // 实际不会发生，因为上面逻辑保证了所有资源都被分配
-                }
-                
+
                 if (allRecords.length === 0) {
                     return res.json({ success: false, message: '⚠️ 没有可用的资源！' });
                 }
@@ -624,11 +602,11 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                 db.serialize(() => {
                     db.run('BEGIN TRANSACTION');
                     const stmt = db.prepare('INSERT INTO draw_records (resource_id, draw_date, week_key) VALUES (?, ?, ?)');
-                    
+
                     allRecords.forEach(record => {
                         stmt.run(record.resource_id, record.draw_date, record.week_key);
                     });
-                    
+
                     stmt.finalize();
                     db.run('COMMIT', (err) => {
                         if (err) {
@@ -637,16 +615,16 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                         }
 
                         const totalCount = allRecords.length;
-                        logOperation(username, '批量抽取整周', 
-                            `共${totalCount}条记录，${userCount}人参与，方案: ${currentPlan}`, 
+                        logOperation(username, '批量抽取整周',
+                            `共${totalCount}条记录，${userCount}人参与，方案: ${currentPlan}`,
                             ip
                         );
-                        
-                        const workReport = userAssignments.map(a => 
+
+                        const workReport = userAssignments.map(a =>
                             `${a.username}: 路口${a.crossCount}个(权重1) + 路段${a.roadCount}个(权重0.5) = ${a.totalWork.toFixed(1)}`
                         ).join(' | ');
 
-                        const detailMsg = dailyStats.map(d => 
+                        const detailMsg = dailyStats.map(d =>
                             d.date + '(' + d.dayOfWeek + '): 路段' + d.roadCount + '个 + 路口' + d.crossCount + '个 = ' + d.total + '个'
                         ).join('\n');
 
@@ -841,7 +819,7 @@ app.get('/api/admin/all-assessments', requireAuth, (req, res) => {
         sql += ` AND a.assessment_date BETWEEN ? AND ?`;
         params.push(startDate, endDate);
     }
-    
+
     if (drawDate) {
         sql += ` AND a.assessment_date = ?`;
         params.push(drawDate);
@@ -878,7 +856,7 @@ app.get('/api/admin/export-assessments', requireAuth, (req, res) => {
         sql += ` AND a.assessment_date BETWEEN ? AND ?`;
         params.push(startDate, endDate);
     }
-    
+
     if (drawDate) {
         sql += ` AND a.assessment_date = ?`;
         params.push(drawDate);
