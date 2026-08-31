@@ -157,7 +157,7 @@
         <button class="btn btn-success" id="exportBtn">📥 导出 CSV</button>
         <button class="btn btn-admin" id="adminToggleBtn">⚙️ 管理</button>
         <button class="btn btn-assessment" id="assessmentBtn">📝 数据填写</button>
-        <span class="draw-info" id="drawInfo">📌 整周: 每天路段8个 + 路口7个</span>
+        <span class="draw-info" id="drawInfo">📌 均衡分配：路口权重1.0，路段权重0.5</span>
         <span style="font-size:0.85rem;color:#5a7a92;margin-left:auto;" id="statusText">✅ 已连接</span>
     </div>
 
@@ -198,8 +198,8 @@
             </div>
             <div class="table-wrap resource-list-wrap">
                 <table id="resourceListTable">
-                    <thead><tr><th>编号</th><th>名称</th><th>类型</th><th>区域</th><th>责任人</th></tr></thead>
-                    <tbody id="resourceListBody"><tr><td colspan="5" class="empty-state">加载中...</td></tr></tbody>
+                    <thead><tr><th>编号</th><th>名称</th><th>类型</th><th>区域</th></tr></thead>
+                    <tbody id="resourceListBody"><tr><td colspan="4" class="empty-state">加载中...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -216,7 +216,7 @@
                     </div>
                     <div class="plan-option" data-plan="plan_b">
                         <input type="radio" name="plan" value="plan_b" id="plan_b">
-                        <label for="plan_b">📋 方案B（43个资源：9路段 + 34路口）</label>
+                        <label for="plan_b">📋 方案B（42个资源：8路段 + 34路口）</label>
                     </div>
                 </div>
                 <button class="btn btn-primary" id="activatePlanBtn" style="margin-top:12px;">✅ 激活所选方案</button>
@@ -267,7 +267,7 @@
             </div>
             <div class="table-wrap summary-wrap">
                 <table id="summaryTable">
-                    <thead><tr><th>#</th><th>类型</th><th>名称</th><th>区域</th><th>责任人</th><th>测评人</th><th>测评日期</th><th>遵章率</th><th>备注</th></tr></thead>
+                    <thead><tr><th>#</th><th>类型</th><th>名称</th><th>区域</th><th>分配人</th><th>测评人</th><th>测评日期</th><th>遵章率</th><th>备注</th></tr></thead>
                     <tbody id="summaryBody"><tr><td colspan="9" class="empty-state">暂无数据</td></tr></tbody>
                 </table>
             </div>
@@ -448,7 +448,7 @@
                 adminPanel.classList.add('hidden');
             }
         }
-        drawInfo.textContent = '📌 整周: 权重 路口1.0 / 路段0.5';
+        drawInfo.textContent = '📌 均衡分配：路口权重1.0，路段权重0.5';
     }
 
     async function doLogin() {
@@ -507,7 +507,6 @@
             const data = await resp.json();
             if (data) {
                 currentPlanKey = data.plan_key;
-                // 更新UI
                 document.querySelectorAll('.plan-option').forEach(el => {
                     el.classList.toggle('active', el.dataset.plan === data.plan_key);
                     const radio = el.querySelector('input[type="radio"]');
@@ -526,7 +525,6 @@
             const resp = await fetch(API_BASE + '/api/resource-plans', { credentials: 'include' });
             const plans = await resp.json();
             
-            // 更新单选按钮状态
             plans.forEach(p => {
                 const radio = document.querySelector(`input[name="plan"][value="${p.plan_key}"]`);
                 if (radio) radio.checked = p.is_active === 1;
@@ -584,7 +582,6 @@
         weekKey = getWeekKey();
         statusText.textContent = '🔄 加载中...';
         try {
-            // 获取当前方案
             const planResp = await fetch(API_BASE + '/api/active-plan', { credentials: 'include' });
             const planData = await planResp.json();
             currentPlanKey = planData ? planData.plan_key : 'plan_a';
@@ -637,10 +634,11 @@
             html += '<div class="day-group">';
             html += '<div class="day-title">📅 ' + date + ' (' + dayLabel + ') <span class="count">路段 ' + roadCount + ' 个 · 路口 ' + crossCount + ' 个</span></div>';
             html += '<div class="day-rows"><table>';
-            html += '<thead><tr><th style="width:50px;">#</th><th>名称</th><th>类型</th><th>区域</th><th>责任人</th></tr></thead><tbody>';
+            html += '<thead><tr><th style="width:50px;">#</th><th>名称</th><th>类型</th><th>区域</th><th>分配人</th></tr></thead><tbody>';
             rows.forEach((r, idx) => {
                 const badgeClass = r.type === 'road' ? 'badge-road' : 'badge-cross';
-                html += '<tr><td>' + (idx + 1) + '</td><td><strong>' + r.name + '</strong></td><td><span class="badge ' + badgeClass + '">' + r.type_label + '</span></td><td>' + (r.area || '') + '</td><td>' + r.responsible + '</td></tr>';
+                const assignedTo = r.assigned_to || '';
+                html += '<tr><td>' + (idx + 1) + '</td><td><strong>' + r.name + '</strong></td><td><span class="badge ' + badgeClass + '">' + r.type_label + '</span></td><td>' + (r.area || '') + '</td><td>' + assignedTo + '</td></tr>';
             });
             html += '</tbody></table></div></div>';
         });
@@ -694,10 +692,10 @@
 
     function doExport() {
         if (drawnRecords.length === 0) { alert('📭 暂无抽取记录'); return; }
-        let csv = '\uFEFF序号,日期,周几,名称,类型,区域,责任人\n';
+        let csv = '\uFEFF序号,日期,周几,名称,类型,区域,分配人\n';
         drawnRecords.forEach((r, i) => {
             const day = getDayLabel(r.draw_date);
-            csv += (i + 1) + ',' + r.draw_date + ',' + day + ',' + r.name + ',' + r.type_label + ',' + (r.area || '') + ',' + r.responsible + '\n';
+            csv += (i + 1) + ',' + r.draw_date + ',' + day + ',' + r.name + ',' + r.type_label + ',' + (r.area || '') + ',' + (r.assigned_to || '') + '\n';
         });
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
@@ -810,7 +808,7 @@
             const data = await resp.json();
             if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
             
-            const headers = ['序号', '类型', '测评点位', '区域', '责任人', '测评人', '测评日期',
+            const headers = ['序号', '类型', '测评点位', '区域', '分配人', '测评人', '测评日期',
                 '班次', '摄像头位置', '路口方向', '开始时间', '结束时间',
                 '非机动车行人数', '逆行', '闯红灯', '越线停车', '行人不走斑马线', '其他',
                 '合计', '非机动车行人遵章率',
@@ -869,12 +867,12 @@
             const data = await resp.json();
             if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
             
-            const headers = ['序号', '日期', '周几', '编号', '名称', '类型', '区域', '责任人'];
+            const headers = ['序号', '日期', '周几', '编号', '名称', '类型', '区域', '分配人'];
             const dayMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
             const rows = data.map((row, idx) => {
                 const d = new Date(row.draw_date + 'T00:00:00');
                 const day = dayMap[d.getDay()];
-                return [idx + 1, row.draw_date, day, row.id, row.name, row.type_label, row.area || '', row.responsible];
+                return [idx + 1, row.draw_date, day, row.id, row.name, row.type_label, row.area || '', row.assigned_to || ''];
             });
             const wsData = [headers].concat(rows);
             const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -964,7 +962,7 @@
     }
 
     async function loadResourceList() {
-        resourceListBody.innerHTML = '<tr><td colspan="5" class="empty-state">⏳ 加载中...</td></tr>';
+        resourceListBody.innerHTML = '<tr><td colspan="4" class="empty-state">⏳ 加载中...</td></tr>';
         try {
             const planResp = await fetch(API_BASE + '/api/active-plan', { credentials: 'include' });
             const planData = await planResp.json();
@@ -973,14 +971,14 @@
             const resp = await fetch(API_BASE + '/api/resources?planKey=' + planKey, { credentials: 'include' });
             if (!resp.ok) throw new Error('加载失败');
             const data = await resp.json();
-            if (data.length === 0) { resourceListBody.innerHTML = '<tr><td colspan="5" class="empty-state">📭 暂无资源数据</td></tr>'; return; }
+            if (data.length === 0) { resourceListBody.innerHTML = '<tr><td colspan="4" class="empty-state">📭 暂无资源数据</td></tr>'; return; }
             resourceListBody.innerHTML = data.map(function(r) {
                 var badgeClass = r.type === 'road' ? 'badge-road' : 'badge-cross';
                 var typeLabel = r.type === 'road' ? '路段' : '路口';
-                return '<tr><td><strong>' + (r.id || '') + '</strong></td><td>' + (r.name || '') + '</td><td><span class="badge ' + badgeClass + '">' + typeLabel + '</span></td><td>' + (r.area || '') + '</td><td>' + (r.responsible || '') + '</td></tr>';
+                return '<tr><td><strong>' + (r.id || '') + '</strong></td><td>' + (r.name || '') + '</td><td><span class="badge ' + badgeClass + '">' + typeLabel + '</span></td><td>' + (r.area || '') + '</td></tr>';
             }).join('');
         } catch (e) {
-            resourceListBody.innerHTML = '<tr><td colspan="5" class="empty-state">❌ 加载失败</td></tr>';
+            resourceListBody.innerHTML = '<tr><td colspan="4" class="empty-state">❌ 加载失败</td></tr>';
         }
     }
 
@@ -1112,7 +1110,6 @@
 
     // ===== 启动 =====
     checkAuth();
-    // 已关闭自动刷新
 })();
 </script>
 </body>
