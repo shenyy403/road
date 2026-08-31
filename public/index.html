@@ -734,65 +734,126 @@ function doImportWeek() {
     fileInput.click();
 }
 
-    
-
-    // ===== 导出功能 =====
-    async function exportAssessments(params, filename) {
-        try {
-            const url = new URL(API_BASE + '/api/admin/export-assessments');
-            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-            const resp = await fetch(url, { credentials: 'include' });
-            if (!resp.ok) throw new Error('导出失败');
-            const data = await resp.json();
-            if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
+// ===== 导出测评数据（全部字段） =====
+async function exportAssessments(params, filename) {
+    try {
+        const url = new URL(API_BASE + '/api/admin/export-assessments');
+        Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+        const resp = await fetch(url, { credentials: 'include' });
+        if (!resp.ok) throw new Error('导出失败');
+        const data = await resp.json();
+        if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
+        
+        // ===== 全部字段列表 =====
+        const headers = [
+            '序号', '类型', '测评点位', '责任人', '测评人', '测评日期',
+            '班次', '摄像头位置', '路口方向',
+            '开始时间', '结束时间',
+            '非机动车行人数', '逆行', '闯红灯', '越线停车', '行人不走斑马线', '其他',
+            '合计', '非机动车行人遵章率',
+            '右转弯机动车数量', '未礼让数量', '礼让率',
+            '路口违法车辆数',
+            '非机动车通过总数', '走错车道数', '遵章率(非机动车)',
+            '机动车乱停乱放数', '行人乱穿马路数',
+            '斑马线过车总数', '未礼让数(斑马线)', '遵章率(斑马线)',
+            '备注'
+        ];
+        
+        const rows = data.map((row, idx) => {
+            // 判断类型
+            const typeLabel = row.type === 'road' ? '路段' : '路口';
+            // 班次：从 paixu 字段读取（早/晚）
+            const shift = row.paixu || '';
             
-            const headers = ['序号', '类型', '名称', '责任人', '测评人', '测评日期', '遵章率', '备注'];
-            const rows = data.map((row, idx) => {
-                return [idx + 1, row.type === 'road' ? '路段' : '路口', row.name || '', row.responsible || '', row.evaluator || '', row.assessment_date || '', row.compliance_rate || row.compliance_rate_non || row.compliance_rate_cross || '', row.remark || ''];
-            });
-            const wsData = [headers].concat(rows);
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, '测评数据');
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/octet-stream' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = filename || '测评数据_' + new Date().toISOString().slice(0, 10) + '.xlsx';
-            link.click();
-            URL.revokeObjectURL(link.href);
-        } catch (e) { alert('❌ 导出失败：' + e.message); }
+            return [
+                idx + 1,
+                typeLabel,
+                row.name || '',
+                row.responsible || '',
+                row.evaluator || '',
+                row.assessment_date || '',
+                shift,
+                row.camera || '',
+                row.direction || '',
+                row.time_start || '',
+                row.time_end || '',
+                row.non_motor_count || '',
+                row.reverse_count || '',
+                row.red_light_count || '',
+                row.stop_line_count || '',
+                row.no_crosswalk_count || '',
+                row.other_count || '',
+                row.total || '',
+                row.compliance_rate || '',
+                row.right_turn_count || '',
+                row.no_yield_count || '',
+                row.yield_rate || '',
+                row.illegal_count || '',
+                row.non_motor_total || '',
+                row.wrong_lane_count || '',
+                row.compliance_rate_non || '',
+                row.parking_violation || '',
+                row.jaywalk_count || '',
+                row.crosswalk_total || '',
+                row.no_yield_cross || '',
+                row.compliance_rate_cross || '',
+                row.remark || ''
+            ];
+        });
+        
+        const wsData = [headers].concat(rows);
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        
+        // 设置列宽
+        ws['!cols'] = [
+            { wch: 6 },   // 序号
+            { wch: 8 },   // 类型
+            { wch: 20 },  // 测评点位
+            { wch: 10 },  // 责任人
+            { wch: 10 },  // 测评人
+            { wch: 12 },  // 测评日期
+            { wch: 6 },   // 班次
+            { wch: 16 },  // 摄像头位置
+            { wch: 10 },  // 路口方向
+            { wch: 10 },  // 开始时间
+            { wch: 10 },  // 结束时间
+            { wch: 12 },  // 非机动车行人数
+            { wch: 8 },   // 逆行
+            { wch: 8 },   // 闯红灯
+            { wch: 8 },   // 越线停车
+            { wch: 12 },  // 行人不走斑马线
+            { wch: 8 },   // 其他
+            { wch: 8 },   // 合计
+            { wch: 14 },  // 非机动车行人遵章率
+            { wch: 12 },  // 右转弯机动车数量
+            { wch: 10 },  // 未礼让数量
+            { wch: 8 },   // 礼让率
+            { wch: 12 },  // 路口违法车辆数
+            { wch: 14 },  // 非机动车通过总数
+            { wch: 10 },  // 走错车道数
+            { wch: 14 },  // 遵章率(非机动车)
+            { wch: 14 },  // 机动车乱停乱放数
+            { wch: 12 },  // 行人乱穿马路数
+            { wch: 14 },  // 斑马线过车总数
+            { wch: 12 },  // 未礼让数(斑马线)
+            { wch: 14 },  // 遵章率(斑马线)
+            { wch: 16 }   // 备注
+        ];
+        
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, '测评数据');
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename || '测评数据_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+        link.click();
+        URL.revokeObjectURL(link.href);
+    } catch (e) { 
+        alert('❌ 导出失败：' + e.message);
+        console.error(e);
     }
-
-    async function exportDrawRecords(params, filename) {
-        try {
-            const url = new URL(API_BASE + '/api/admin/export-draw-records');
-            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-            const resp = await fetch(url, { credentials: 'include' });
-            if (!resp.ok) throw new Error('导出失败');
-            const data = await resp.json();
-            if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
-            
-            const headers = ['序号', '日期', '周几', '编号', '名称', '类型', '责任人'];
-            const dayMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-            const rows = data.map((row, idx) => {
-                const d = new Date(row.draw_date + 'T00:00:00');
-                const day = dayMap[d.getDay()];
-                return [idx + 1, row.draw_date, day, row.id, row.name, row.type_label, row.responsible];
-            });
-            const wsData = [headers].concat(rows);
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, '抽取记录');
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/octet-stream' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = filename || '抽取记录_' + new Date().toISOString().slice(0, 10) + '.xlsx';
-            link.click();
-            URL.revokeObjectURL(link.href);
-        } catch (e) { alert('❌ 导出失败：' + e.message); }
-    }
+}
 
     // ===== 用户管理 =====
     async function loadUsers() {
