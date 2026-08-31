@@ -49,12 +49,14 @@ db.serialize(() => {
     )
   `);
 
+  // ===== 抽取记录表（增加 assigned_to 字段） =====
   db.run(`
     CREATE TABLE IF NOT EXISTS draw_records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       resource_id TEXT NOT NULL,
       draw_date TEXT NOT NULL,
       week_key TEXT NOT NULL,
+      assigned_to TEXT,
       FOREIGN KEY (resource_id) REFERENCES resources(id)
     )
   `);
@@ -230,7 +232,7 @@ function initDefaultResources() {
       name: d.name,
       type: 'cross',
       type_label: '路口',
-      responsible: '',  // 无责任人
+      responsible: '',
       area: d.area,
       camera: d.camera,
       plan_key: 'plan_a'
@@ -244,7 +246,7 @@ function initDefaultResources() {
       name: d.name,
       type: 'cross',
       type_label: '路口',
-      responsible: '',  // 无责任人
+      responsible: '',
       area: d.area,
       camera: d.camera,
       plan_key: 'plan_b'
