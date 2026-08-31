@@ -13,7 +13,7 @@ const db = new sqlite3.Database(dbPath);
 db.run('PRAGMA foreign_keys = ON');
 
 db.serialize(() => {
-  // ===== 用户表（保留） =====
+  // ===== 用户表 =====
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,23 +35,14 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 强制重置资源数据（保留用户） =====
-  console.log('🗑️ 正在清空旧资源数据...');
-  db.run('DROP TABLE IF EXISTS resources');
-  db.run('DROP TABLE IF EXISTS resource_plans');
-  db.run('DROP TABLE IF EXISTS draw_records');
-  db.run('DROP TABLE IF EXISTS assessments');
-  db.run('DROP TABLE IF EXISTS user_participants');
-  console.log('✅ 旧资源表已删除，将重建');
-
-  // ===== 重建资源表 =====
+  // ===== 资源表（无责任人） =====
   db.run(`
     CREATE TABLE IF NOT EXISTS resources (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       type TEXT NOT NULL,
       type_label TEXT NOT NULL,
-      responsible TEXT NOT NULL,
+      responsible TEXT,
       area TEXT,
       camera TEXT,
       plan_key TEXT NOT NULL
@@ -128,7 +119,7 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 创建用户（已存在则跳过） =====
+  // ===== 创建用户 =====
   const allUsers = [
     { username: '石晓婷', password: '199639', role: 'admin' },
     { username: '白书语', password: 'Ywxtly0428', role: 'admin' },
@@ -187,13 +178,13 @@ db.serialize(() => {
 });
 
 // ============================================================
-// 资源数据
+// 资源数据（所有资源 responsible 为空）
 // ============================================================
 function initDefaultResources() {
   const allResources = [];
 
   // ============================================================
-  // 路口数据 (C1~C34) - 两套方案共用
+  // 路口数据 (C1~C34)
   // ============================================================
   const crossData = [
     { id: 'C1', name: '锦兴路成都街151', camera: '锦兴路成都街', area: '高新区' },
@@ -232,38 +223,28 @@ function initDefaultResources() {
     { id: 'C34', name: '解放路云飞南街北侧', camera: '解放路云飞街', area: '凌河区' }
   ];
 
-  // 路口责任人分配（34个路口）
-  const crossResponsibles = [
-    '韩江', '关鑫', '王鑫', '王鼎群', '付彧', '田丰',
-    '刘添睿', '刘嘉伦', '关丽丽', '孙昱', '毕世伟', '李松',
-    '肖阳', '李佳', '杨子晴', '佟璘', '张健', '金晓宇',
-    '赵一雯', '徐嘉璐', '郭翔宇', '姬鹏', '文雷', '才多',
-    '韩江', '关鑫', '王鑫', '王鼎群', '付彧', '田丰',
-    '刘添睿', '刘嘉伦', '关丽丽', '孙昱'
-  ];
-
-  // 方案A的路口
-  crossData.forEach((d, i) => {
+  // 方案A路口
+  crossData.forEach((d) => {
     allResources.push({
       id: d.id,
       name: d.name,
       type: 'cross',
       type_label: '路口',
-      responsible: crossResponsibles[i % crossResponsibles.length],
+      responsible: '',  // 无责任人
       area: d.area,
       camera: d.camera,
       plan_key: 'plan_a'
     });
   });
 
-  // 方案B的路口
-  crossData.forEach((d, i) => {
+  // 方案B路口
+  crossData.forEach((d) => {
     allResources.push({
       id: d.id + '_b',
       name: d.name,
       type: 'cross',
       type_label: '路口',
-      responsible: crossResponsibles[i % crossResponsibles.length],
+      responsible: '',  // 无责任人
       area: d.area,
       camera: d.camera,
       plan_key: 'plan_b'
@@ -312,22 +293,13 @@ function initDefaultResources() {
     { id: 'R36', name: '重庆路', camera: '重庆路新制街369', area: '凌河区' }
   ];
 
-  const roadResponsibles = [
-    '韩江', '关鑫', '王鑫', '王鼎群', '付彧', '田丰',
-    '刘添睿', '刘嘉伦', '关丽丽', '孙昱', '毕世伟', '李松',
-    '肖阳', '李佳', '杨子晴', '佟璘', '张健', '吴达',
-    '金晓宇', '赵一雯', '徐嘉璐', '郭翔宇', '姬鹏', '文雷',
-    '才多', '石晓婷', '石晓婷', '石晓婷', '吴达', '吴达',
-    '韩江', '关鑫', '王鑫', '王鼎群', '付彧', '田丰'
-  ];
-
-  roadDataA.forEach((d, i) => {
+  roadDataA.forEach((d) => {
     allResources.push({
       id: d.id,
       name: d.name,
       type: 'road',
       type_label: '路段',
-      responsible: roadResponsibles[i % roadResponsibles.length],
+      responsible: '',
       area: d.area,
       camera: d.camera,
       plan_key: 'plan_a'
@@ -338,28 +310,23 @@ function initDefaultResources() {
   // 方案B - 8个路段
   // ============================================================
   const roadDataB = [
-    { id: 'R2', name: '典逸新洲东门斑马线', camera: '锦兴路-成都街-五期', area: '松山区' },
-    { id: 'R8', name: '太平街路口南100米斑马线', camera: '凌西大街太平街00204', area: '太和区' },
-    { id: 'R10', name: '洛阳路南侧200米斑马线', camera: '中央街洛阳路00333', area: '凌河区' },
-    { id: 'R16', name: '回民小学门前斑马线', camera: '士英街金缘路0054', area: '古塔区' },
-    { id: 'R21', name: '石油公司门前斑马线', camera: '解放路汉口街00138', area: '古塔区' },
-    { id: 'R23', name: '天鹅堡门前西侧100米斑马线', camera: '科技路云飞街西00420', area: '松山区' },
-    { id: 'R33', name: '锦绣前程南宁路路口北100米斑马线', camera: '南宁路山西街173', area: '古塔区' },
-    { id: 'R36', name: '新制街路口东200米斑马线', camera: '重庆路新制街369', area: '凌河区' }
+    { id: 'R2_b', name: '典逸新洲东门斑马线', camera: '锦兴路-成都街-五期', area: '松山区' },
+    { id: 'R8_b', name: '太平街路口南100米斑马线', camera: '凌西大街太平街00204', area: '太和区' },
+    { id: 'R10_b', name: '洛阳路南侧200米斑马线', camera: '中央街洛阳路00333', area: '凌河区' },
+    { id: 'R16_b', name: '回民小学门前斑马线', camera: '士英街金缘路0054', area: '古塔区' },
+    { id: 'R21_b', name: '石油公司门前斑马线', camera: '解放路汉口街00138', area: '古塔区' },
+    { id: 'R23_b', name: '天鹅堡门前西侧100米斑马线', camera: '科技路云飞街西00420', area: '松山区' },
+    { id: 'R33_b', name: '锦绣前程南宁路路口北100米斑马线', camera: '南宁路山西街173', area: '古塔区' },
+    { id: 'R36_b', name: '新制街路口东200米斑马线', camera: '重庆路新制街369', area: '凌河区' }
   ];
 
-  const roadResponsiblesB = [
-    '关鑫', '刘嘉伦', '孙昱', '佟璘', '金晓宇',
-    '徐嘉璐', '王鑫', '田丰'
-  ];
-
-  roadDataB.forEach((d, i) => {
+  roadDataB.forEach((d) => {
     allResources.push({
-      id: d.id + '_b',
+      id: d.id,
       name: d.name,
       type: 'road',
       type_label: '路段',
-      responsible: roadResponsiblesB[i % roadResponsiblesB.length],
+      responsible: '',
       area: d.area,
       camera: d.camera,
       plan_key: 'plan_b'
@@ -379,7 +346,7 @@ function initDefaultResources() {
 
   stmt.finalize();
 
-  console.log(`✅ 资源初始化完成:`);
+  console.log(`✅ 资源初始化完成（无责任人）:`);
   console.log(`   - 方案A: 70个资源 (36路段 + 34路口)`);
   console.log(`   - 方案B: 42个资源 (8路段 + 34路口)`);
   console.log(`   - 总计: ${allResources.length} 条记录`);
