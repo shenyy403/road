@@ -13,7 +13,7 @@ const db = new sqlite3.Database(dbPath);
 db.run('PRAGMA foreign_keys = ON');
 
 db.serialize(() => {
-  // ===== 用户表 =====
+  // ===== 用户表（保留） =====
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,7 +24,6 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 操作日志表 =====
   db.run(`
     CREATE TABLE IF NOT EXISTS operation_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +35,16 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 资源表 =====
+  // ===== 强制重置资源数据（保留用户） =====
+  console.log('🗑️ 正在清空旧资源数据...');
+  db.run('DROP TABLE IF EXISTS resources');
+  db.run('DROP TABLE IF EXISTS resource_plans');
+  db.run('DROP TABLE IF EXISTS draw_records');
+  db.run('DROP TABLE IF EXISTS assessments');
+  db.run('DROP TABLE IF EXISTS user_participants');
+  console.log('✅ 旧资源表已删除，将重建');
+
+  // ===== 重建资源表 =====
   db.run(`
     CREATE TABLE IF NOT EXISTS resources (
       id TEXT PRIMARY KEY,
@@ -50,7 +58,6 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 抽取记录表 =====
   db.run(`
     CREATE TABLE IF NOT EXISTS draw_records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +68,6 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 测评数据表 =====
   db.run(`
     CREATE TABLE IF NOT EXISTS assessments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,7 +107,6 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 资源方案表 =====
   db.run(`
     CREATE TABLE IF NOT EXISTS resource_plans (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,7 +117,6 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 用户参与管理表 =====
   db.run(`
     CREATE TABLE IF NOT EXISTS user_participants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,7 +128,7 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 创建用户 =====
+  // ===== 创建用户（已存在则跳过） =====
   const allUsers = [
     { username: '石晓婷', password: '199639', role: 'admin' },
     { username: '白书语', password: 'Ywxtly0428', role: 'admin' },
@@ -167,16 +171,10 @@ db.serialize(() => {
   });
 
   // ===== 初始化资源方案 =====
-  db.get('SELECT COUNT(*) as count FROM resource_plans', (err, row) => {
-    if (err) return console.error(err);
-    if (row.count === 0) {
-      console.log('📦 初始化资源方案...');
-      db.run('INSERT INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
-        ['plan_a', '方案A（70个资源）', 1]);
-      db.run('INSERT INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
-        ['plan_b', '方案B（42个资源：8路段 + 34路口）', 0]);
-    }
-  });
+  db.run('INSERT OR IGNORE INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
+    ['plan_a', '方案A（70个资源）', 1]);
+  db.run('INSERT OR IGNORE INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
+    ['plan_b', '方案B（42个资源：8路段 + 34路口）', 0]);
 
   // ===== 初始化资源 =====
   db.get('SELECT COUNT(*) as count FROM resources', (err, row) => {
@@ -192,12 +190,6 @@ db.serialize(() => {
 // 资源数据
 // ============================================================
 function initDefaultResources() {
-  // 先确保方案存在
-  db.run('INSERT OR IGNORE INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
-    ['plan_a', '方案A（70个资源）', 1]);
-  db.run('INSERT OR IGNORE INTO resource_plans (plan_key, plan_name, is_active) VALUES (?, ?, ?)',
-    ['plan_b', '方案B（42个资源：8路段 + 34路口）', 0]);
-
   const allResources = [];
 
   // ============================================================
@@ -240,7 +232,7 @@ function initDefaultResources() {
     { id: 'C34', name: '解放路云飞南街北侧', camera: '解放路云飞街', area: '凌河区' }
   ];
 
-  // 路口责任人分配（34个路口，每人1-2个）
+  // 路口责任人分配（34个路口）
   const crossResponsibles = [
     '韩江', '关鑫', '王鑫', '王鼎群', '付彧', '田丰',
     '刘添睿', '刘嘉伦', '关丽丽', '孙昱', '毕世伟', '李松',
@@ -250,7 +242,7 @@ function initDefaultResources() {
     '刘添睿', '刘嘉伦', '关丽丽', '孙昱'
   ];
 
-  // 方案A的路口（plan_a）
+  // 方案A的路口
   crossData.forEach((d, i) => {
     allResources.push({
       id: d.id,
@@ -264,7 +256,7 @@ function initDefaultResources() {
     });
   });
 
-  // 方案B的路口（plan_b）
+  // 方案B的路口
   crossData.forEach((d, i) => {
     allResources.push({
       id: d.id + '_b',
@@ -320,7 +312,6 @@ function initDefaultResources() {
     { id: 'R36', name: '重庆路', camera: '重庆路新制街369', area: '凌河区' }
   ];
 
-  // 路段责任人分配
   const roadResponsibles = [
     '韩江', '关鑫', '王鑫', '王鼎群', '付彧', '田丰',
     '刘添睿', '刘嘉伦', '关丽丽', '孙昱', '毕世伟', '李松',
@@ -357,7 +348,6 @@ function initDefaultResources() {
     { id: 'R36', name: '新制街路口东200米斑马线', camera: '重庆路新制街369', area: '凌河区' }
   ];
 
-  // 方案B路段责任人
   const roadResponsiblesB = [
     '关鑫', '刘嘉伦', '孙昱', '佟璘', '金晓宇',
     '徐嘉璐', '王鑫', '田丰'
