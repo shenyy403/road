@@ -58,10 +58,12 @@ function getTodayChina() {
     return `${year}-${month}-${day}`;
 }
 
+// ============ 获取本周一到周五的日期 ============
 function getWeekDatesFromToday() {
     const today = new Date();
-    const todayDay = today.getDay();
+    const todayDay = today.getDay(); // 0=周日, 1=周一, ..., 6=周六
     
+    // 计算本周一
     let daysToMonday;
     if (todayDay === 0) {
         daysToMonday = 6;
@@ -71,6 +73,7 @@ function getWeekDatesFromToday() {
     
     const monday = new Date(today);
     monday.setDate(today.getDate() - daysToMonday);
+    monday.setHours(0, 0, 0, 0);
     
     const dates = [];
     for (let i = 0; i < 5; i++) {
@@ -483,7 +486,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                     roads: []
                 }));
                 
-                // 分配路口
+                // 分配路口（权重1.0）
                 let crossIndex = 0;
                 while (crossIndex < shuffledCrosses.length) {
                     for (let u = 0; u < userAssignments.length && crossIndex < shuffledCrosses.length; u++) {
@@ -496,7 +499,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                     if (crossIndex > 0 && userAssignments.every(u => u.totalWork >= avgWork)) break;
                 }
                 
-                // 分配路段
+                // 分配路段（权重0.5）
                 let roadIndex = 0;
                 while (roadIndex < shuffledRoads.length) {
                     for (let u = 0; u < userAssignments.length && roadIndex < shuffledRoads.length; u++) {
@@ -526,45 +529,74 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                     userAssignments[0].roadCount++;
                     userAssignments[0].totalWork += 0.5;
                 });
-                
-                // 生成抽取记录
+
+                // ============================================================
+                // 生成抽取记录 - 确保所有资源都被分配到5天
+                // ============================================================
                 const allRecords = [];
                 const dailyStats = [];
                 
+                // 收集所有需要分配的资源
+                let allCrossesToAssign = [];
+                let allRoadsToAssign = [];
+                userAssignments.forEach(a => {
+                    allCrossesToAssign = allCrossesToAssign.concat(a.crosses);
+                    allRoadsToAssign = allRoadsToAssign.concat(a.roads);
+                });
+                
+                // 随机打乱，让每天的分配更均匀
+                allCrossesToAssign = allCrossesToAssign.sort(() => Math.random() - 0.5);
+                allRoadsToAssign = allRoadsToAssign.sort(() => Math.random() - 0.5);
+                
+                // 计算每天应该分配的路口和路段数量
+                const totalCrossesToAssign = allCrossesToAssign.length;
+                const totalRoadsToAssign = allRoadsToAssign.length;
+                const totalDays = dates.length;
+                
+                // 每天基础数量（路口）
+                const baseCrossPerDay = Math.floor(totalCrossesToAssign / totalDays);
+                const remainCrosses = totalCrossesToAssign - baseCrossPerDay * totalDays;
+                
+                // 每天基础数量（路段）
+                const baseRoadPerDay = Math.floor(totalRoadsToAssign / totalDays);
+                const remainRoads = totalRoadsToAssign - baseRoadPerDay * totalDays;
+                
+                let crossIdx = 0;
+                let roadIdx = 0;
+                
                 dates.forEach((date, dayIndex) => {
-                    const dayRecords = [];
+                    // 计算当天路口数
+                    let dayCrossCount = baseCrossPerDay;
+                    if (dayIndex < remainCrosses) dayCrossCount++;
                     
-                    userAssignments.forEach(assignment => {
-                        assignment.crosses.forEach((cross, idx) => {
-                            if (idx % 5 === dayIndex) {
-                                dayRecords.push({ 
-                                    resource_id: cross.id, 
-                                    draw_date: date, 
-                                    week_key: weekKey 
-                                });
-                            }
+                    const dayCrosses = allCrossesToAssign.slice(crossIdx, crossIdx + dayCrossCount);
+                    crossIdx += dayCrossCount;
+                    
+                    // 计算当天路段数
+                    let dayRoadCount = baseRoadPerDay;
+                    if (dayIndex < remainRoads) dayRoadCount++;
+                    
+                    const dayRoads = allRoadsToAssign.slice(roadIdx, roadIdx + dayRoadCount);
+                    roadIdx += dayRoadCount;
+                    
+                    // 生成该天的记录
+                    const dayRecords = [];
+                    dayCrosses.forEach(cross => {
+                        dayRecords.push({
+                            resource_id: cross.id,
+                            draw_date: date,
+                            week_key: weekKey
                         });
-                        assignment.roads.forEach((road, idx) => {
-                            if (idx % 5 === dayIndex) {
-                                dayRecords.push({ 
-                                    resource_id: road.id, 
-                                    draw_date: date, 
-                                    week_key: weekKey 
-                                });
-                            }
+                    });
+                    dayRoads.forEach(road => {
+                        dayRecords.push({
+                            resource_id: road.id,
+                            draw_date: date,
+                            week_key: weekKey
                         });
                     });
                     
                     allRecords.push(...dayRecords);
-                    
-                    const dayRoads = dayRecords.filter(r => {
-                        const res = allResources.find(res => res.id === r.resource_id);
-                        return res && res.type === 'road';
-                    });
-                    const dayCrosses = dayRecords.filter(r => {
-                        const res = allResources.find(res => res.id === r.resource_id);
-                        return res && res.type === 'cross';
-                    });
                     
                     dailyStats.push({
                         date: date,
@@ -574,6 +606,16 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                         total: dayRecords.length
                     });
                 });
+                
+                // 验证所有资源是否都被分配
+                const totalAssigned = allRecords.length;
+                const expectedTotal = totalCrossesToAssign + totalRoadsToAssign;
+                
+                if (totalAssigned !== expectedTotal) {
+                    console.error(`资源分配不完整！期望 ${expectedTotal}，实际 ${totalAssigned}`);
+                    // 如果有遗漏，补充分配
+                    // 实际不会发生，因为上面逻辑保证了所有资源都被分配
+                }
                 
                 if (allRecords.length === 0) {
                     return res.json({ success: false, message: '⚠️ 没有可用的资源！' });
@@ -605,7 +647,7 @@ app.post('/api/draw-week', requireAuth, (req, res) => {
                         ).join(' | ');
 
                         const detailMsg = dailyStats.map(d => 
-                            d.date + '(' + d.dayOfWeek + '): ' + d.total + '个'
+                            d.date + '(' + d.dayOfWeek + '): 路段' + d.roadCount + '个 + 路口' + d.crossCount + '个 = ' + d.total + '个'
                         ).join('\n');
 
                         res.json({
