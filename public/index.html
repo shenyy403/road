@@ -155,6 +155,7 @@
         <button class="btn btn-primary" id="drawWeekBtn">🎲 抽取整周</button>
         <button class="btn btn-outline" id="resetBtn" style="display:none;">🔄 重置本周</button>
         <button class="btn btn-success" id="exportBtn">📥 导出 CSV</button>
+        <button class="btn btn-warning" id="importWeekBtn" style="display:none;">📤 导入本周点位</button>
         <button class="btn btn-admin" id="adminToggleBtn">⚙️ 管理</button>
         <button class="btn btn-assessment" id="assessmentBtn">📝 数据填写</button>
         <span class="draw-info" id="drawInfo">📌 均衡分配：路口权重1.0，路段权重0.5</span>
@@ -337,6 +338,7 @@
     const drawWeekBtn = document.getElementById('drawWeekBtn');
     const resetBtn = document.getElementById('resetBtn');
     const exportBtn = document.getElementById('exportBtn');
+    const importWeekBtn = document.getElementById('importWeekBtn');
     const adminToggleBtn = document.getElementById('adminToggleBtn');
     const adminPanel = document.getElementById('adminPanel');
     const closeAdminPanel = document.getElementById('closeAdminPanel');
@@ -435,6 +437,7 @@
             if (currentUser.role === 'admin') {
                 drawWeekBtn.style.display = 'inline-flex';
                 resetBtn.style.display = 'inline-flex';
+                importWeekBtn.style.display = 'inline-flex';
                 adminToggleBtn.classList.remove('hidden');
                 const end = new Date();
                 const start = new Date();
@@ -444,6 +447,7 @@
             } else {
                 drawWeekBtn.style.display = 'none';
                 resetBtn.style.display = 'none';
+                importWeekBtn.style.display = 'none';
                 adminToggleBtn.classList.add('hidden');
                 adminPanel.classList.add('hidden');
             }
@@ -704,6 +708,174 @@
         link.click();
         URL.revokeObjectURL(link.href);
     }
+
+    // ===== 导入本周点位 =====
+    function doImportWeek() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.xlsx,.xls';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+        
+        fileInput.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                
+                // 解析数据
+                const records = [];
+                let dateCol = -1, nameCol = -1, assignCol = -1;
+                let headerFound = false;
+                
+                // 先获取当前方案的所有资源
+                const planResp = await fetch('/api/active-plan', { credentials: 'include' });
+                const planData = await planResp.json();
+                const planKey = planData ? planData.plan_key : 'plan_a';
+                
+                const resResp = await fetch('/api/resources?planKey=' + planKey, { credentials: 'include' });
+                const allResources = await resResp.json();
+                
+                for (const row of rows) {
+                    if (row.length < 3) continue;
+                    
+                    const firstCell = String(row[0] || '');
+                    
+                    // 检测表头
+                    if (!headerFound) {
+                        for (let i = 0; i < row.length; i++) {
+                            const cell = String(row[i] || '').trim();
+                            if (cell.includes('日期') || cell === '日期') dateCol = i;
+                            if (cell.includes('名称') || cell === '名称' || cell.includes('点位')) nameCol = i;
+                            if (cell.includes('分配人') || cell === '分配人' || cell.includes('责任人')) assignCol = i;
+                        }
+                        if (dateCol >= 0 && nameCol >= 0) {
+                            headerFound = true;
+                            continue;
+                        }
+                    }
+                    
+                    if (!headerFound && row.length >= 5) {
+                        headerFound = true;
+                        dateCol = 1;
+                        nameCol = 3;
+                        assignCol = 6;
+                    }
+                    
+                    if (dateCol < 0 || nameCol < 0) continue;
+                    
+                    // 解析日期
+                    let dateStr = '';
+                    const dateCell = row[dateCol];
+                    if (dateCell !== undefined && dateCell !== null) {
+                        if (typeof dateCell === 'number') {
+                            const excelEpoch = new Date(1899, 11, 30);
+                            const days = parseFloat(dateCell);
+                            const d = new Date(excelEpoch.getTime() + days * 86400000);
+                            const year = d.getFullYear();
+                            const month = String(d.getMonth() + 1).padStart(2, '0');
+                            const day = String(d.getDate()).padStart(2, '0');
+                            dateStr = `${year}-${month}-${day}`;
+                        } else if (typeof dateCell === 'string') {
+                            const trimmed = dateCell.trim();
+                            const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                            if (match) {
+                                dateStr = `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+                            } else {
+                                const d = new Date(trimmed);
+                                if (!isNaN(d.getTime())) {
+                                    dateStr = d.toISOString().slice(0, 10);
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!dateStr) {
+                        console.warn('无法解析日期:', dateCell);
+                        continue;
+                    }
+                    
+                    const name = String(row[nameCol] || '').trim();
+                    const assignedTo = assignCol >= 0 ? String(row[assignCol] || '').trim() : '';
+                    
+                    if (!name || !dateStr) continue;
+                    
+                    // 查找对应的资源
+                    let resource = allResources.find(r => r.name === name);
+                    if (!resource) {
+                        console.warn('未找到资源:', name);
+                        continue;
+                    }
+                    
+                    records.push({
+                        resource_id: resource.id,
+                        draw_date: dateStr,
+                        week_key: weekKey,
+                        assigned_to: assignedTo || ''
+                    });
+                }
+                
+                if (records.length === 0) {
+                    alert('⚠️ 没有解析到有效数据，请检查文件格式');
+                    return;
+                }
+                
+                // 预览
+                const dateGroups = {};
+                records.forEach(r => {
+                    if (!dateGroups[r.draw_date]) dateGroups[r.draw_date] = [];
+                    dateGroups[r.draw_date].push(r.resource_id);
+                });
+                
+                let previewMsg = '📋 将导入以下数据：\n\n';
+                Object.keys(dateGroups).sort().forEach(date => {
+                    previewMsg += `📅 ${date}：${dateGroups[date].length} 个点位\n`;
+                });
+                previewMsg += `\n共计 ${records.length} 条记录`;
+                
+                if (!confirm(previewMsg + '\n\n确认导入？（会先清空本周数据）')) {
+                    fileInput.remove();
+                    return;
+                }
+                
+                // 先清空本周
+                await fetch('/api/reset/' + weekKey, { method: 'DELETE' });
+                
+                // 批量导入
+                let successCount = 0;
+                for (const record of records) {
+                    try {
+                        const resp = await fetch('/api/import-draw-record', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify(record)
+                        });
+                        if (resp.ok) successCount++;
+                    } catch (e) {
+                        console.warn('导入失败:', record, e);
+                    }
+                }
+                
+                alert('✅ 成功导入 ' + successCount + ' 条记录！');
+                await loadData();
+                
+            } catch (e) {
+                alert('❌ 导入失败：' + e.message);
+                console.error(e);
+            }
+            fileInput.remove();
+        });
+        
+        fileInput.click();
+    }
+
+    // 绑定导入按钮事件
+    importWeekBtn.addEventListener('click', doImportWeek);
 
     // ===== 参与用户管理 =====
     async function loadParticipants() {
