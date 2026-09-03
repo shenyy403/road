@@ -15,7 +15,7 @@
         .section-title .badge { background: #1d6f9c; color: white; font-size: 12px; padding: 2px 14px; border-radius: 30px; font-weight: 400; }
         .section-title .auto-fill-info { font-size: 12px; color: #1f8b4c; font-weight: 400; margin-left: auto; }
         .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #dde6ef; }
-        table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 1600px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 1200px; }
         th { background: #eaf1fa; color: #1a3d5a; font-weight: 600; padding: 8px 6px; text-align: center; border: 1px solid #c9dcee; white-space: nowrap; position: sticky; top: 0; z-index: 2; font-size: 12px; }
         td { padding: 6px 4px; text-align: center; border: 1px solid #dde6ef; vertical-align: middle; }
         td input, td select { width: 100%; border: none; background: transparent; text-align: center; font-size: 12.5px; padding: 5px 2px; outline: none; border-radius: 4px; transition: 0.15s; min-width: 44px; }
@@ -29,6 +29,30 @@
         td .readonly-cell input { background: #f5f8fc; color: #2c5a7a; cursor: default; font-weight: 600; }
         td .auto-filled { background: #eafaf0; }
         td .auto-filled input { background: #eafaf0; color: #1a6b3a; }
+        td .image-required { background: #fff3cd; }
+        td .image-required input { background: #fff3cd; }
+        td .image-upload-cell { min-width: 120px; }
+        td .image-upload-cell .upload-btn { 
+            padding: 4px 10px; 
+            background: #1d6f9c; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 11px;
+        }
+        td .image-upload-cell .upload-btn:hover { background: #155a80; }
+        td .image-upload-cell .file-input { display: none; }
+        td .image-upload-cell .image-preview { max-width: 80px; max-height: 60px; display: block; margin: 2px auto; border-radius: 4px; }
+        td .image-upload-cell .remove-image { 
+            color: #c73b3b; 
+            cursor: pointer; 
+            font-size: 11px; 
+            display: inline-block;
+            margin-top: 2px;
+        }
+        td .image-upload-cell .remove-image:hover { text-decoration: underline; }
+        td .image-upload-cell .upload-status { font-size: 11px; color: #1f8b4c; display: block; }
         .time-group { display: flex; align-items: center; gap: 4px; justify-content: center; }
         .time-group input { width: 68px; min-width: 50px; }
         .time-group span { font-size: 11px; color: #888; }
@@ -62,7 +86,16 @@
         .sync-status.synced { background: #d4edda; color: #155724; }
         .sync-status.syncing { background: #fff3cd; color: #856404; }
         .sync-status.error { background: #f8d7da; color: #721c24; }
-        @media (max-width: 768px) { .container { padding: 14px; } .formula-grid { grid-template-columns: 1fr; } table { font-size: 11px; min-width: 1200px; } th, td { padding: 4px 3px; } td input { font-size: 11px; min-width: 36px; } .time-group input { width: 50px; min-width: 40px; } }
+        .image-required-badge { 
+            display: inline-block; 
+            background: #dc3545; 
+            color: white; 
+            font-size: 10px; 
+            padding: 1px 8px; 
+            border-radius: 10px; 
+            margin-left: 4px;
+        }
+        @media (max-width: 768px) { .container { padding: 14px; } .formula-grid { grid-template-columns: 1fr; } table { font-size: 11px; min-width: 1000px; } th, td { padding: 4px 3px; } td input { font-size: 11px; min-width: 36px; } .time-group input { width: 50px; min-width: 40px; } }
         @media print { .btn-bar { display: none; } .status-bar { display: none; } body { background: white; padding: 10px; } .container { box-shadow: none; padding: 10px; } td input { border: none; background: transparent; } .formula-item { break-inside: avoid; } }
     </style>
 </head>
@@ -89,25 +122,26 @@
             <table id="crossTable">
                 <thead>
                     <tr>
-                        <th style="min-width:60px;">班次</th>
+                        <th style="min-width:50px;">班次</th>
                         <th style="min-width:120px;">测评点位</th>
                         <th style="min-width:100px;">摄像头位置</th>
-                        <th style="min-width:90px;">路口方向</th>
-                        <th style="min-width:150px;">测评时间段</th>
-                        <th style="min-width:90px;">非机动车<br>行人数</th>
-                        <th style="min-width:60px;">逆行</th>
-                        <th style="min-width:70px;">闯红灯</th>
-                        <th style="min-width:70px;">越线停车</th>
-                        <th style="min-width:100px;">行人不走<br>斑马线</th>
-                        <th style="min-width:60px;">其他</th>
-                        <th style="min-width:60px;">合计</th>
-                        <th style="min-width:100px;">非机动车行人<br>遵章率</th>
-                        <th style="min-width:100px;">右转弯机动<br>车数量</th>
-                        <th style="min-width:80px;">未礼让<br>数量</th>
-                        <th style="min-width:70px;">礼让率</th>
-                        <th style="min-width:90px;">路口违法<br>车辆数</th>
+                        <th style="min-width:80px;">路口方向</th>
+                        <th style="min-width:140px;">测评时间段</th>
+                        <th style="min-width:80px;">非机动车<br>行人数</th>
+                        <th style="min-width:55px;">逆行</th>
+                        <th style="min-width:60px;">闯红灯</th>
+                        <th style="min-width:60px;">越线停车</th>
+                        <th style="min-width:90px;">行人不走<br>斑马线</th>
+                        <th style="min-width:55px;">其他</th>
+                        <th style="min-width:55px;">合计</th>
+                        <th style="min-width:95px;">非机动车行人<br>遵章率</th>
+                        <th style="min-width:90px;">右转弯机动<br>车数量</th>
+                        <th style="min-width:70px;">未礼让<br>数量</th>
+                        <th style="min-width:65px;">礼让率</th>
+                        <th style="min-width:85px;">路口违法<br>车辆数</th>
                         <th style="min-width:60px;">测评人</th>
-                        <th style="min-width:80px;">备注</th>
+                        <th style="min-width:70px;">备注</th>
+                        <th style="min-width:120px;">📎 图片</th>
                     </tr>
                 </thead>
                 <tbody id="crossBody"></tbody>
@@ -115,7 +149,7 @@
         </div>
     </div>
 
-    <!-- 路段部分 -->
+    <!-- 路段部分（简化版） -->
     <div class="section">
         <div class="section-title">
             🛣️ 路段部分
@@ -126,20 +160,16 @@
             <table id="roadTable">
                 <thead>
                     <tr>
-                        <th style="min-width:60px;">班次</th>
+                        <th style="min-width:50px;">班次</th>
                         <th style="min-width:120px;">路段名称</th>
                         <th style="min-width:100px;">视频设备名称</th>
-                        <th style="min-width:150px;">测评时间段</th>
-                        <th style="min-width:100px;">非机动车<br>通过总数</th>
-                        <th style="min-width:90px;">走错车道数</th>
-                        <th style="min-width:110px;">遵章率<br>(非机动车)</th>
-                        <th style="min-width:100px;">机动车乱停<br>乱放数</th>
-                        <th style="min-width:90px;">行人乱穿<br>马路数</th>
-                        <th style="min-width:100px;">斑马线过车<br>总数</th>
-                        <th style="min-width:80px;">未礼让数</th>
-                        <th style="min-width:110px;">遵章率<br>(斑马线)</th>
+                        <th style="min-width:140px;">测评时间段</th>
+                        <th style="min-width:90px;">右转弯机动<br>车数量</th>
+                        <th style="min-width:70px;">未礼让<br>数量</th>
+                        <th style="min-width:65px;">礼让率</th>
                         <th style="min-width:60px;">测评人</th>
-                        <th style="min-width:80px;">备注</th>
+                        <th style="min-width:70px;">备注</th>
+                        <th style="min-width:120px;">📎 图片</th>
                     </tr>
                 </thead>
                 <tbody id="roadBody"></tbody>
@@ -164,8 +194,12 @@
             <div class="formula-item"><div class="label">② 非机动车行人遵章率</div><div class="expr">遵章率 = (非机动车行人数 − 合计) / 非机动车行人数 × 100%</div></div>
             <div class="formula-item"><div class="label">③ 礼让率</div><div class="expr">礼让率 = (右转弯机动车数量 − 未礼让数量) / 右转弯机动车数量 × 100%</div></div>
             <div style="grid-column:1/-1;font-weight:600;color:#1a3d5a;font-size:15px;border-bottom:2px solid #d5e0ed;padding-bottom:6px;margin-top:6px;">🛣️ 路段部分</div>
-            <div class="formula-item"><div class="label">④ 遵章率（非机动车）</div><div class="expr">遵章率 = (非机动车通过总数 − 走错车道数) / 非机动车通过总数 × 100%</div></div>
-            <div class="formula-item"><div class="label">⑤ 遵章率（斑马线）</div><div class="expr">遵章率 = (斑马线过车总数 − 未礼让数) / 斑马线过车总数 × 100%</div></div>
+            <div class="formula-item"><div class="label">④ 礼让率</div><div class="expr">礼让率 = (右转弯机动车数量 − 未礼让数量) / 右转弯机动车数量 × 100%</div></div>
+            <div style="grid-column:1/-1;font-weight:600;color:#dc3545;font-size:13px;border-top:2px solid #dc3545;padding-top:8px;margin-top:4px;">
+                ⚠️ 强制上传图片规则：<br>
+                • 路口：非机动车行人遵章率 &lt; 90% 或 礼让率 &lt; 95% 时必须上传图片<br>
+                • 路段：礼让率 &lt; 95% 时必须上传图片
+            </div>
         </div>
     </div>
 </div>
@@ -176,8 +210,6 @@
     'use strict';
 
     const API_BASE = window.location.origin;
-    const CROSS_ROWS = 7;
-    const ROAD_ROWS = 8;
     let currentUser = 'admin';
     let currentDate = new Date().toISOString().slice(0, 10);
     let todayDrawData = null;
@@ -209,6 +241,182 @@
     function setSyncStatus(type, msg) {
         const classes = { 'synced': '✅ 已同步', 'syncing': '⏳ 同步中...', 'error': '❌ 同步失败' };
         syncStatus.innerHTML = `<span class="sync-status ${type}">${msg || classes[type] || ''}</span>`;
+    }
+
+    // ===== 图片上传函数 =====
+    async function uploadImage(file) {
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        try {
+            const resp = await fetch(API_BASE + '/api/upload-image', {
+                method: 'POST',
+                credentials: 'include',
+                body: formData
+            });
+            const result = await resp.json();
+            if (result.success) {
+                return result.url;
+            } else {
+                throw new Error(result.error || '上传失败');
+            }
+        } catch (e) {
+            throw new Error('上传失败: ' + e.message);
+        }
+    }
+
+    // ===== 创建图片上传控件 =====
+    function createImageUploadCell(rowData, type) {
+        const div = document.createElement('div');
+        div.className = 'image-upload-cell';
+        div.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;';
+        
+        // 隐藏的文件输入
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.className = 'file-input';
+        fileInput.style.display = 'none';
+        
+        // 上传按钮
+        const uploadBtn = document.createElement('button');
+        uploadBtn.className = 'upload-btn';
+        uploadBtn.textContent = '📤 上传图片';
+        uploadBtn.type = 'button';
+        
+        // 图片预览
+        const preview = document.createElement('img');
+        preview.className = 'image-preview';
+        preview.style.display = 'none';
+        if (rowData.imageUrl) {
+            preview.src = rowData.imageUrl;
+            preview.style.display = 'block';
+        }
+        
+        // 状态文字
+        const status = document.createElement('span');
+        status.className = 'upload-status';
+        if (rowData.imageUrl) {
+            status.textContent = '✅ 已上传';
+            status.style.color = '#1f8b4c';
+        }
+        
+        // 删除按钮
+        const removeBtn = document.createElement('span');
+        removeBtn.className = 'remove-image';
+        removeBtn.textContent = '✕ 删除';
+        if (!rowData.imageUrl) {
+            removeBtn.style.display = 'none';
+        }
+        
+        // 文件选择事件
+        fileInput.addEventListener('change', async function(e) {
+            const file = this.files[0];
+            if (!file) return;
+            
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '⏳ 上传中...';
+            status.textContent = '⏳ 上传中...';
+            status.style.color = '#856404';
+            
+            try {
+                const url = await uploadImage(file);
+                rowData.imageUrl = url;
+                preview.src = url;
+                preview.style.display = 'block';
+                status.textContent = '✅ 已上传';
+                status.style.color = '#1f8b4c';
+                removeBtn.style.display = 'inline-block';
+                uploadBtn.textContent = '📤 重新上传';
+                // 触发更新检查
+                checkImageRequired(rowData, type);
+            } catch (e) {
+                status.textContent = '❌ ' + e.message;
+                status.style.color = '#c73b3b';
+            }
+            
+            uploadBtn.disabled = false;
+            fileInput.value = '';
+        });
+        
+        // 删除图片
+        removeBtn.addEventListener('click', function() {
+            rowData.imageUrl = '';
+            preview.style.display = 'none';
+            preview.src = '';
+            status.textContent = '';
+            removeBtn.style.display = 'none';
+            uploadBtn.textContent = '📤 上传图片';
+            checkImageRequired(rowData, type);
+        });
+        
+        uploadBtn.addEventListener('click', function() {
+            fileInput.click();
+        });
+        
+        div.appendChild(fileInput);
+        div.appendChild(preview);
+        div.appendChild(uploadBtn);
+        div.appendChild(status);
+        div.appendChild(removeBtn);
+        
+        return div;
+    }
+
+    // ===== 检查是否需要上传图片 =====
+    function checkImageRequired(rowData, type) {
+        // 找到该行所在的tr
+        const tr = document.querySelector(`tr[data-row-index="${rowData.rowIndex}"][data-type="${type}"]`);
+        if (!tr) return;
+        
+        const imageCell = tr.querySelector('.image-upload-cell');
+        if (!imageCell) return;
+        
+        let required = false;
+        
+        if (type === 'cross') {
+            // 路口：非机动车遵章率 < 90% 或 礼让率 < 95%
+            const compliance = parseFloat(rowData.compliance_rate) || 0;
+            const yieldRate = parseFloat(rowData.yield_rate) || 0;
+            if (compliance > 0 && compliance < 90) required = true;
+            if (yieldRate > 0 && yieldRate < 95) required = true;
+        } else if (type === 'road') {
+            // 路段：礼让率 < 95%
+            const yieldRate = parseFloat(rowData.yield_rate) || 0;
+            if (yieldRate > 0 && yieldRate < 95) required = true;
+        }
+        
+        // 标记行背景
+        if (required) {
+            tr.style.backgroundColor = '#fff3cd';
+            // 添加提示标记
+            let badge = tr.querySelector('.image-required-badge');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'image-required-badge';
+                badge.textContent = '📷 必传';
+                const firstTd = tr.querySelector('td:first-child');
+                if (firstTd) firstTd.appendChild(badge);
+            }
+        } else {
+            tr.style.backgroundColor = '';
+            const badge = tr.querySelector('.image-required-badge');
+            if (badge) badge.remove();
+        }
+        
+        // 更新状态文字
+        const status = imageCell.querySelector('.upload-status');
+        if (status) {
+            if (required && !rowData.imageUrl) {
+                status.textContent = '⚠️ 必须上传图片！';
+                status.style.color = '#dc3545';
+            } else if (rowData.imageUrl) {
+                status.textContent = '✅ 已上传';
+                status.style.color = '#1f8b4c';
+            } else {
+                status.textContent = '';
+            }
+        }
     }
 
     async function fetchTodayDraw() {
@@ -256,11 +464,11 @@
     }
 
     function createEmptyCrossRow(index, shift) {
-        return { type: 'cross', row_index: index, paixu: shift === '早班' ? '早' : '晚', name: '', camera: '', direction: '', time_start: '', time_end: '', non_motor_count: '', reverse_count: '', red_light_count: '', stop_line_count: '', no_crosswalk_count: '', other_count: '', total: '', compliance_rate: '', right_turn_count: '', no_yield_count: '', yield_rate: '', illegal_count: '', evaluator: '', remark: '', isAutoFilled: false, shift: shift };
+        return { type: 'cross', row_index: index, paixu: shift === '早班' ? '早' : '晚', name: '', camera: '', direction: '', time_start: '', time_end: '', non_motor_count: '', reverse_count: '', red_light_count: '', stop_line_count: '', no_crosswalk_count: '', other_count: '', total: '', compliance_rate: '', right_turn_count: '', no_yield_count: '', yield_rate: '', illegal_count: '', evaluator: '', remark: '', imageUrl: '', isAutoFilled: false, shift: shift };
     }
 
     function createEmptyRoadRow(index, shift) {
-        return { type: 'road', row_index: index, paixu: shift === '早班' ? '早' : '晚', name: '', device: '', time_start: '', time_end: '', non_motor_total: '', wrong_lane_count: '', compliance_rate_non: '', parking_violation: '', jaywalk_count: '', crosswalk_total: '', no_yield_cross: '', compliance_rate_cross: '', evaluator: '', remark: '', isAutoFilled: false, shift: shift };
+        return { type: 'road', row_index: index, paixu: shift === '早班' ? '早' : '晚', name: '', device: '', time_start: '', time_end: '', right_turn_count: '', no_yield_count: '', yield_rate: '', evaluator: '', remark: '', imageUrl: '', isAutoFilled: false, shift: shift };
     }
 
     function calcCrossTotal(row) {
@@ -273,22 +481,10 @@
         return total === 0 ? '' : ((total - sum) / total * 100);
     }
 
-    function calcCrossYield(row) {
+    function calcYield(row) {
         const rightTurn = parseFloat(row.right_turn_count)||0;
         const noYield = parseFloat(row.no_yield_count)||0;
         return rightTurn === 0 ? '' : ((rightTurn - noYield) / rightTurn * 100);
-    }
-
-    function calcRoadComplianceNon(row) {
-        const total = parseFloat(row.non_motor_total)||0;
-        const wrong = parseFloat(row.wrong_lane_count)||0;
-        return total === 0 ? '' : ((total - wrong) / total * 100);
-    }
-
-    function calcRoadComplianceCross(row) {
-        const total = parseFloat(row.crosswalk_total)||0;
-        const noYield = parseFloat(row.no_yield_cross)||0;
-        return total === 0 ? '' : ((total - noYield) / total * 100);
     }
 
     // ===== renderCrossTable =====
@@ -304,7 +500,7 @@
         const SHIFTS = ['早班', '晚班'];
         
         if (drawCrosses.length === 0) {
-            crossBody.innerHTML = '<tr><td colspan="19" style="text-align:center;padding:20px;color:#999;">📭 今日暂无您负责的路口被抽取</td></tr>';
+            crossBody.innerHTML = '<tr><td colspan="20" style="text-align:center;padding:20px;color:#999;">📭 今日暂无您负责的路口被抽取</td></tr>';
             crossCount.textContent = '0 行';
             crossFillInfo.textContent = '📌 自动填入 0 行';
             return;
@@ -341,6 +537,7 @@
                         illegal_count: savedItem.illegal_count || '',
                         evaluator: savedItem.evaluator || currentUser,
                         remark: savedItem.remark || '',
+                        imageUrl: savedItem.imageUrl || '',
                         isAutoFilled: false,
                         shift: shift
                     };
@@ -368,6 +565,7 @@
                         illegal_count: '',
                         evaluator: currentUser,
                         remark: '',
+                        imageUrl: '',
                         isAutoFilled: true,
                         shift: shift
                     };
@@ -379,12 +577,18 @@
                 tr.dataset.index = rowIndex;
                 tr.dataset.type = 'cross';
                 tr.dataset.shift = shift;
+                tr.dataset.rowIndex = rowIndex;
                 
                 const isAuto = row.isAutoFilled;
                 const autoClass = isAuto ? 'auto-filled' : '';
                 const total = calcCrossTotal(row);
                 const compliance = calcCrossCompliance(row);
-                const yieldRate = calcCrossYield(row);
+                const yieldRate = calcYield(row);
+
+                // 更新行数据
+                row.total = total;
+                row.compliance_rate = compliance;
+                row.yield_rate = yieldRate;
 
                 const displayPaixu = row.paixu || (shift === '早班' ? '早' : '晚');
 
@@ -408,8 +612,26 @@
                     <td><input type="number" class="cross-illegal" value="${row.illegal_count || ''}" min="0"></td>
                     <td class="${autoClass}"><input type="text" class="cross-evaluator" value="${row.evaluator || ''}" placeholder=""></td>
                     <td><input type="text" class="cross-remark" value="${row.remark || ''}" placeholder=""></td>
+                    <td class="image-cell"></td>
                 `;
                 crossBody.appendChild(tr);
+                
+                // 添加图片上传控件
+                const imageCell = tr.querySelector('.image-cell');
+                const uploadDiv = createImageUploadCell(row, 'cross');
+                imageCell.appendChild(uploadDiv);
+                
+                // 绑定输入事件更新计算
+                const inputs = tr.querySelectorAll('input');
+                inputs.forEach(inp => {
+                    inp.addEventListener('input', function() {
+                        updateCrossRow(tr, row);
+                    });
+                    inp.addEventListener('change', function() {
+                        updateCrossRow(tr, row);
+                    });
+                });
+                
                 rowIndex++;
             });
         });
@@ -418,7 +640,49 @@
         crossCount.textContent = `${drawCrosses.length * 2} 行（${drawCrosses.length}个路口 × 2班次）`;
     }
 
-    // ===== renderRoadTable =====
+    // ===== 更新路口行数据 =====
+    function updateCrossRow(tr, row) {
+        const get = (sel) => tr.querySelector(sel)?.value || '';
+        const getNum = (sel) => parseFloat(tr.querySelector(sel)?.value) || 0;
+        
+        row.non_motor_count = get('.cross-nonMotor');
+        row.reverse_count = get('.cross-reverse');
+        row.red_light_count = get('.cross-redLight');
+        row.stop_line_count = get('.cross-stopLine');
+        row.no_crosswalk_count = get('.cross-noCrosswalk');
+        row.other_count = get('.cross-other');
+        row.right_turn_count = get('.cross-rightTurn');
+        row.no_yield_count = get('.cross-noYield');
+        row.illegal_count = get('.cross-illegal');
+        row.remark = get('.cross-remark');
+        row.direction = get('.cross-direction');
+        row.time_start = get('.cross-time-start');
+        row.time_end = get('.cross-time-end');
+        row.paixu = get('.cross-paixu');
+        row.evaluator = get('.cross-evaluator') || currentUser;
+        
+        const total = calcCrossTotal(row);
+        const compliance = calcCrossCompliance(row);
+        const yieldRate = calcYield(row);
+        
+        row.total = total;
+        row.compliance_rate = compliance;
+        row.yield_rate = yieldRate;
+        
+        const totalInput = tr.querySelector('.cross-total');
+        if (totalInput) totalInput.value = total || '';
+        
+        const compInput = tr.querySelector('.cross-compliance');
+        if (compInput) compInput.value = compliance !== '' ? compliance.toFixed(1) + '%' : '';
+        
+        const yieldInput = tr.querySelector('.cross-yieldRate');
+        if (yieldInput) yieldInput.value = yieldRate !== '' ? yieldRate.toFixed(1) + '%' : '';
+        
+        // 检查是否需要上传图片
+        checkImageRequired(row, 'cross');
+    }
+
+    // ===== renderRoadTable（简化版） =====
     function renderRoadTable(drawData, savedData) {
         roadBody.innerHTML = '';
         const drawRoads = drawData?.road || [];
@@ -431,7 +695,7 @@
         const SHIFTS = ['早班', '晚班'];
         
         if (drawRoads.length === 0) {
-            roadBody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:#999;">📭 今日暂无您负责的路段被抽取</td></tr>';
+            roadBody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#999;">📭 今日暂无您负责的路段被抽取</td></tr>';
             roadCount.textContent = '0 行';
             roadFillInfo.textContent = '📌 自动填入 0 行';
             return;
@@ -453,16 +717,12 @@
                         device: savedItem.camera || drawItem.camera || '',
                         time_start: savedItem.time_start || '',
                         time_end: savedItem.time_end || '',
-                        non_motor_total: savedItem.non_motor_total || '',
-                        wrong_lane_count: savedItem.wrong_lane_count || '',
-                        compliance_rate_non: savedItem.compliance_rate_non || '',
-                        parking_violation: savedItem.parking_violation || '',
-                        jaywalk_count: savedItem.jaywalk_count || '',
-                        crosswalk_total: savedItem.crosswalk_total || '',
-                        no_yield_cross: savedItem.no_yield_cross || '',
-                        compliance_rate_cross: savedItem.compliance_rate_cross || '',
+                        right_turn_count: savedItem.right_turn_count || '',
+                        no_yield_count: savedItem.no_yield_count || '',
+                        yield_rate: savedItem.yield_rate || '',
                         evaluator: savedItem.evaluator || currentUser,
                         remark: savedItem.remark || '',
+                        imageUrl: savedItem.imageUrl || '',
                         isAutoFilled: false,
                         shift: shift
                     };
@@ -475,16 +735,12 @@
                         device: drawItem.camera || '',
                         time_start: '',
                         time_end: '',
-                        non_motor_total: '',
-                        wrong_lane_count: '',
-                        compliance_rate_non: '',
-                        parking_violation: '',
-                        jaywalk_count: '',
-                        crosswalk_total: '',
-                        no_yield_cross: '',
-                        compliance_rate_cross: '',
+                        right_turn_count: '',
+                        no_yield_count: '',
+                        yield_rate: '',
                         evaluator: currentUser,
                         remark: '',
+                        imageUrl: '',
                         isAutoFilled: true,
                         shift: shift
                     };
@@ -496,11 +752,12 @@
                 tr.dataset.index = rowIndex;
                 tr.dataset.type = 'road';
                 tr.dataset.shift = shift;
+                tr.dataset.rowIndex = rowIndex;
                 
                 const isAuto = row.isAutoFilled;
                 const autoClass = isAuto ? 'auto-filled' : '';
-                const compNon = calcRoadComplianceNon(row);
-                const compCross = calcRoadComplianceCross(row);
+                const yieldRate = calcYield(row);
+                row.yield_rate = yieldRate;
 
                 const displayPaixu = row.paixu || (shift === '早班' ? '早' : '晚');
 
@@ -509,18 +766,31 @@
                     <td class="${autoClass}"><input type="text" class="road-name" value="${row.name || ''}" placeholder="" readonly style="background:#f5f8fc;color:#1a4970;font-weight:600;"></td>
                     <td class="${autoClass}"><input type="text" class="road-device" value="${row.device || ''}" placeholder=""></td>
                     <td><div class="time-group"><input type="time" class="road-time-start time-input" value="${row.time_start || ''}"><span>~</span><input type="time" class="road-time-end time-input" value="${row.time_end || ''}"></div></td>
-                    <td><input type="number" class="road-nonMotorTotal" value="${row.non_motor_total || ''}" min="0"></td>
-                    <td><input type="number" class="road-wrongLane" value="${row.wrong_lane_count || ''}" min="0"></td>
-                    <td class="formula-cell"><input type="text" class="road-complianceNon" value="${compNon !== '' ? compNon.toFixed(1) + '%' : ''}" readonly></td>
-                    <td><input type="number" class="road-parking" value="${row.parking_violation || ''}" min="0"></td>
-                    <td><input type="number" class="road-jaywalk" value="${row.jaywalk_count || ''}" min="0"></td>
-                    <td><input type="number" class="road-crosswalkTotal" value="${row.crosswalk_total || ''}" min="0"></td>
-                    <td><input type="number" class="road-noYield" value="${row.no_yield_cross || ''}" min="0"></td>
-                    <td class="formula-cell"><input type="text" class="road-complianceCross" value="${compCross !== '' ? compCross.toFixed(1) + '%' : ''}" readonly></td>
+                    <td><input type="number" class="road-rightTurn" value="${row.right_turn_count || ''}" min="0"></td>
+                    <td><input type="number" class="road-noYield" value="${row.no_yield_count || ''}" min="0"></td>
+                    <td class="formula-cell"><input type="text" class="road-yieldRate" value="${yieldRate !== '' ? yieldRate.toFixed(1) + '%' : ''}" readonly></td>
                     <td class="${autoClass}"><input type="text" class="road-evaluator" value="${row.evaluator || ''}" placeholder=""></td>
                     <td><input type="text" class="road-remark" value="${row.remark || ''}" placeholder=""></td>
+                    <td class="image-cell"></td>
                 `;
                 roadBody.appendChild(tr);
+                
+                // 添加图片上传控件
+                const imageCell = tr.querySelector('.image-cell');
+                const uploadDiv = createImageUploadCell(row, 'road');
+                imageCell.appendChild(uploadDiv);
+                
+                // 绑定输入事件
+                const inputs = tr.querySelectorAll('input');
+                inputs.forEach(inp => {
+                    inp.addEventListener('input', function() {
+                        updateRoadRow(tr, row);
+                    });
+                    inp.addEventListener('change', function() {
+                        updateRoadRow(tr, row);
+                    });
+                });
+                
                 rowIndex++;
             });
         });
@@ -529,13 +799,43 @@
         roadCount.textContent = `${drawRoads.length * 2} 行（${drawRoads.length}个路段 × 2班次）`;
     }
 
+    // ===== 更新路段行数据 =====
+    function updateRoadRow(tr, row) {
+        const get = (sel) => tr.querySelector(sel)?.value || '';
+        const getNum = (sel) => parseFloat(tr.querySelector(sel)?.value) || 0;
+        
+        row.right_turn_count = get('.road-rightTurn');
+        row.no_yield_count = get('.road-noYield');
+        row.remark = get('.road-remark');
+        row.time_start = get('.road-time-start');
+        row.time_end = get('.road-time-end');
+        row.paixu = get('.road-paixu');
+        row.evaluator = get('.road-evaluator') || currentUser;
+        
+        const yieldRate = calcYield(row);
+        row.yield_rate = yieldRate;
+        
+        const yieldInput = tr.querySelector('.road-yieldRate');
+        if (yieldInput) yieldInput.value = yieldRate !== '' ? yieldRate.toFixed(1) + '%' : '';
+        
+        checkImageRequired(row, 'road');
+    }
+
     function collectAllData() {
         const assessments = [];
         document.querySelectorAll('#crossBody .data-row').forEach(tr => {
             const get = (sel) => tr.querySelector(sel)?.value || '';
+            const rowIndex = parseInt(tr.dataset.index) || 0;
+            // 获取图片URL
+            const imageCell = tr.querySelector('.image-upload-cell');
+            let imageUrl = '';
+            if (imageCell) {
+                const img = imageCell.querySelector('.image-preview');
+                if (img && img.src) imageUrl = img.src;
+            }
             assessments.push({ 
                 type: 'cross', 
-                row_index: parseInt(tr.dataset.index)||0, 
+                row_index: rowIndex, 
                 paixu: get('.cross-paixu'), 
                 name: get('.cross-name'), 
                 camera: get('.cross-camera'), 
@@ -555,22 +855,22 @@
                 yield_rate: get('.cross-yieldRate'), 
                 illegal_count: get('.cross-illegal'), 
                 evaluator: get('.cross-evaluator') || currentUser, 
-                remark: get('.cross-remark'), 
-                non_motor_total: '', 
-                wrong_lane_count: '', 
-                compliance_rate_non: '', 
-                parking_violation: '', 
-                jaywalk_count: '', 
-                crosswalk_total: '', 
-                no_yield_cross: '', 
-                compliance_rate_cross: '' 
+                remark: get('.cross-remark'),
+                imageUrl: imageUrl
             });
         });
         document.querySelectorAll('#roadBody .data-row').forEach(tr => {
             const get = (sel) => tr.querySelector(sel)?.value || '';
+            const rowIndex = parseInt(tr.dataset.index) || 0;
+            let imageUrl = '';
+            const imageCell = tr.querySelector('.image-upload-cell');
+            if (imageCell) {
+                const img = imageCell.querySelector('.image-preview');
+                if (img && img.src) imageUrl = img.src;
+            }
             assessments.push({ 
                 type: 'road', 
-                row_index: parseInt(tr.dataset.index)||0, 
+                row_index: rowIndex, 
                 paixu: get('.road-paixu'), 
                 name: get('.road-name'), 
                 camera: get('.road-device'), 
@@ -585,79 +885,62 @@
                 other_count: '', 
                 total: '', 
                 compliance_rate: '', 
-                right_turn_count: '', 
-                no_yield_count: '', 
-                yield_rate: '', 
+                right_turn_count: get('.road-rightTurn'), 
+                no_yield_count: get('.road-noYield'), 
+                yield_rate: get('.road-yieldRate'), 
                 illegal_count: '', 
                 evaluator: get('.road-evaluator') || currentUser, 
-                remark: get('.road-remark') || '', 
-                non_motor_total: get('.road-nonMotorTotal'), 
-                wrong_lane_count: get('.road-wrongLane'), 
-                compliance_rate_non: get('.road-complianceNon'), 
-                parking_violation: get('.road-parking'), 
-                jaywalk_count: get('.road-jaywalk'), 
-                crosswalk_total: get('.road-crosswalkTotal'), 
-                no_yield_cross: get('.road-noYield'), 
-                compliance_rate_cross: get('.road-complianceCross') 
+                remark: get('.road-remark'),
+                imageUrl: imageUrl
             });
         });
         return assessments;
     }
 
-    function updateCalculations() {
-        document.querySelectorAll('#crossBody .data-row').forEach(tr => {
-            const get = (sel) => tr.querySelector(sel);
-            const getVal = (sel) => parseFloat(tr.querySelector(sel)?.value)||0;
-            const total = getVal('.cross-reverse') + getVal('.cross-redLight') + getVal('.cross-stopLine') + getVal('.cross-noCrosswalk') + getVal('.cross-other');
-            const totalInput = get('.cross-total');
-            if (totalInput) totalInput.value = total || '';
-            const nonMotor = getVal('.cross-nonMotor');
-            const compliance = nonMotor > 0 ? ((nonMotor - total) / nonMotor * 100) : '';
-            const compInput = get('.cross-compliance');
-            if (compInput) compInput.value = compliance !== '' ? compliance.toFixed(1) + '%' : '';
-            const rightTurn = getVal('.cross-rightTurn');
-            const noYield = getVal('.cross-noYield');
-            const yieldRate = rightTurn > 0 ? ((rightTurn - noYield) / rightTurn * 100) : '';
-            const yieldInput = get('.cross-yieldRate');
-            if (yieldInput) yieldInput.value = yieldRate !== '' ? yieldRate.toFixed(1) + '%' : '';
-        });
-        document.querySelectorAll('#roadBody .data-row').forEach(tr => {
-            const get = (sel) => tr.querySelector(sel);
-            const getVal = (sel) => parseFloat(tr.querySelector(sel)?.value)||0;
-            const nonMotorTotal = getVal('.road-nonMotorTotal');
-            const wrongLane = getVal('.road-wrongLane');
-            const compNon = nonMotorTotal > 0 ? ((nonMotorTotal - wrongLane) / nonMotorTotal * 100) : '';
-            const compNonInput = get('.road-complianceNon');
-            if (compNonInput) compNonInput.value = compNon !== '' ? compNon.toFixed(1) + '%' : '';
-            const crosswalkTotal = getVal('.road-crosswalkTotal');
-            const noYield = getVal('.road-noYield');
-            const compCross = crosswalkTotal > 0 ? ((crosswalkTotal - noYield) / crosswalkTotal * 100) : '';
-            const compCrossInput = get('.road-complianceCross');
-            if (compCrossInput) compCrossInput.value = compCross !== '' ? compCross.toFixed(1) + '%' : '';
-        });
-    }
-
-    async function loadAllData() {
-        setSyncStatus('syncing', '⏳ 加载数据...');
-        try {
-            const [drawData, savedData] = await Promise.all([fetchTodayDraw(), fetchMyAssessments()]);
-            renderCrossTable(drawData, savedData);
-            renderRoadTable(drawData, savedData);
-            updateCalculations();
-            setSyncStatus('synced', '✅ 数据已加载');
-            saveStatus.textContent = `✅ ${new Date().toLocaleTimeString()} 数据已加载`;
-            saveStatus.style.color = '#1f8b4c';
-        } catch (e) {
-            setSyncStatus('error', '❌ 加载失败');
-            saveStatus.textContent = '❌ 加载失败';
-            saveStatus.style.color = '#c73b3b';
-        }
-    }
-
+    // ===== 验证并提交 =====
     async function doSubmit() {
         const assessments = collectAllData();
         const valid = assessments.filter(r => r.name && r.name.trim() !== '');
         if (valid.length === 0) { alert('⚠️ 没有可提交的数据，请先填写测评内容'); return; }
+        
+        // 验证强制上传图片
+        let imageErrors = [];
+        valid.forEach((row, idx) => {
+            const type = row.type === 'cross' ? '路口' : '路段';
+            const name = row.name || '未知点位';
+            const compliance = parseFloat(row.compliance_rate) || 0;
+            const yieldRate = parseFloat(row.yield_rate) || 0;
+            const hasImage = row.imageUrl && row.imageUrl !== '';
+            
+            let required = false;
+            let reason = '';
+            
+            if (row.type === 'cross') {
+                if (compliance > 0 && compliance < 90) {
+                    required = true;
+                    reason = `非机动车遵章率 ${compliance.toFixed(1)}% < 90%`;
+                }
+                if (yieldRate > 0 && yieldRate < 95) {
+                    required = true;
+                    reason = `礼让率 ${yieldRate.toFixed(1)}% < 95%`;
+                }
+            } else if (row.type === 'road') {
+                if (yieldRate > 0 && yieldRate < 95) {
+                    required = true;
+                    reason = `礼让率 ${yieldRate.toFixed(1)}% < 95%`;
+                }
+            }
+            
+            if (required && !hasImage) {
+                imageErrors.push(`${type} "${name}"：${reason}，必须上传图片！`);
+            }
+        });
+        
+        if (imageErrors.length > 0) {
+            alert('⚠️ 以下点位需要上传图片：\n\n' + imageErrors.join('\n'));
+            return;
+        }
+        
         if (!confirm(`确认提交 ${valid.length} 条测评数据到服务器？`)) return;
         try { await submitAssessments(valid); await loadAllData(); } catch (e) {}
     }
@@ -668,11 +951,11 @@
         if (valid.length === 0) { alert('⚠️ 没有数据可导出'); return; }
         const crossData = valid.filter(r => r.type === 'cross');
         const roadData = valid.filter(r => r.type === 'road');
-        const crossHeaders = ['班次', '测评点位', '摄像头位置', '路口方向', '开始时间', '结束时间', '非机动车行人数', '逆行', '闯红灯', '越线停车', '行人不走斑马线', '其他', '合计', '非机动车行人遵章率', '右转弯机动车数量', '未礼让数量', '礼让率', '路口违法车辆数', '测评人', '测评人备注'];
-        const crossRows = crossData.map(r => [r.paixu, r.name, r.camera, r.direction, r.time_start, r.time_end, r.non_motor_count, r.reverse_count, r.red_light_count, r.stop_line_count, r.no_crosswalk_count, r.other_count, r.total, r.compliance_rate, r.right_turn_count, r.no_yield_count, r.yield_rate, r.illegal_count, r.evaluator, r.remark]);
+        const crossHeaders = ['班次', '测评点位', '摄像头位置', '路口方向', '开始时间', '结束时间', '非机动车行人数', '逆行', '闯红灯', '越线停车', '行人不走斑马线', '其他', '合计', '非机动车行人遵章率', '右转弯机动车数量', '未礼让数量', '礼让率', '路口违法车辆数', '测评人', '备注', '图片'];
+        const crossRows = crossData.map(r => [r.paixu, r.name, r.camera, r.direction, r.time_start, r.time_end, r.non_motor_count, r.reverse_count, r.red_light_count, r.stop_line_count, r.no_crosswalk_count, r.other_count, r.total, r.compliance_rate, r.right_turn_count, r.no_yield_count, r.yield_rate, r.illegal_count, r.evaluator, r.remark, r.imageUrl || '']);
         const crossSheet = XLSX.utils.aoa_to_sheet([crossHeaders, ...crossRows]);
-        const roadHeaders = ['班次', '路段名称', '视频设备名称', '开始时间', '结束时间', '非机动车通过总数', '走错车道数', '遵章率(非机动车)', '机动车乱停乱放数', '行人乱穿马路数', '斑马线过车总数', '未礼让数', '遵章率(斑马线)', '测评人', '备注'];
-        const roadRows = roadData.map(r => [r.paixu, r.name, r.camera, r.time_start, r.time_end, r.non_motor_total, r.wrong_lane_count, r.compliance_rate_non, r.parking_violation, r.jaywalk_count, r.crosswalk_total, r.no_yield_cross, r.compliance_rate_cross, r.evaluator, r.remark]);
+        const roadHeaders = ['班次', '路段名称', '视频设备名称', '开始时间', '结束时间', '右转弯机动车数量', '未礼让数量', '礼让率', '测评人', '备注', '图片'];
+        const roadRows = roadData.map(r => [r.paixu, r.name, r.camera, r.time_start, r.time_end, r.right_turn_count, r.no_yield_count, r.yield_rate, r.evaluator, r.remark, r.imageUrl || '']);
         const roadSheet = XLSX.utils.aoa_to_sheet([roadHeaders, ...roadRows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, crossSheet, '路口');
@@ -694,9 +977,21 @@
         saveStatus.style.color = '#d48c2c';
     }
 
-    document.addEventListener('input', function(e) {
-        if (e.target.closest('.data-row')) { updateCalculations(); }
-    });
+    async function loadAllData() {
+        setSyncStatus('syncing', '⏳ 加载数据...');
+        try {
+            const [drawData, savedData] = await Promise.all([fetchTodayDraw(), fetchMyAssessments()]);
+            renderCrossTable(drawData, savedData);
+            renderRoadTable(drawData, savedData);
+            setSyncStatus('synced', '✅ 数据已加载');
+            saveStatus.textContent = `✅ ${new Date().toLocaleTimeString()} 数据已加载`;
+            saveStatus.style.color = '#1f8b4c';
+        } catch (e) {
+            setSyncStatus('error', '❌ 加载失败');
+            saveStatus.textContent = '❌ 加载失败';
+            saveStatus.style.color = '#c73b3b';
+        }
+    }
 
     saveBtn.addEventListener('click', doSubmit);
     exportBtn.addEventListener('click', doExport);
