@@ -959,6 +959,62 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ============ 图片上传 ============
+const multer = require('multer');
+const fs = require('fs');
+
+// 确保上传目录存在
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// 配置 multer 存储
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        // 生成唯一文件名：时间戳_随机数_原始文件名
+        const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, uniqueSuffix + ext);
+    }
+});
+
+// 文件过滤：只允许图片
+const fileFilter = (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+    } else {
+        cb(new Error('只允许上传图片文件'), false);
+    }
+};
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    fileFilter: fileFilter
+});
+
+// 图片上传接口
+app.post('/api/upload-image', requireAuth, upload.single('image'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: '请选择图片' });
+    }
+    
+    // 返回图片访问路径
+    const imageUrl = '/uploads/' + req.file.filename;
+    res.json({ 
+        success: true, 
+        url: imageUrl,
+        filename: req.file.filename
+    });
+});
+
+// 提供静态文件访问（uploads目录）
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+
 // ============ 启动服务器 ============
 app.listen(PORT, () => {
     console.log(`🚀 服务器运行在端口 ${PORT}`);
