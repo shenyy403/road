@@ -728,6 +728,30 @@ app.delete('/api/reset/:weekKey', requireAuth, (req, res) => {
     });
 });
 
+// ===== 导入单条抽取记录（管理员用） =====
+app.post('/api/import-draw-record', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: '需要管理员权限' });
+    }
+
+    const { resource_id, draw_date, week_key, assigned_to } = req.body;
+    if (!resource_id || !draw_date || !week_key) {
+        return res.status(400).json({ error: '缺少必要参数' });
+    }
+
+    db.run(
+        'INSERT INTO draw_records (resource_id, draw_date, week_key, assigned_to) VALUES (?, ?, ?, ?)',
+        [resource_id, draw_date, week_key, assigned_to || ''],
+        function(err) {
+            if (err) {
+                console.error('导入失败:', err);
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ success: true, id: this.lastID });
+        }
+    );
+});
+
 // ============ 测评数据相关 ============
 app.get('/api/my-assessments-today', requireAuth, (req, res) => {
     const username = req.session.user.username;
