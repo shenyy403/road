@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>指挥中心 · 测评系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
         body { background: #f4f7fc; margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
@@ -121,6 +122,17 @@
         .resource-stats .btn { padding: 4px 16px; font-size: 0.8rem; }
         .export-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
         .export-actions .btn { padding: 4px 16px; font-size: 0.8rem; }
+        .round-box { background: #f0f5fe; padding: 16px; border-radius: 12px; margin-bottom: 16px; }
+        .round-box label { font-weight: 600; color: #1a3d5a; display: block; margin-bottom: 6px; font-size: 14px; }
+        .round-box input[type="text"] { padding: 8px 12px; border: 2px solid #d5dce8; border-radius: 8px; font-size: 0.9rem; margin-bottom: 10px; width: 260px; max-width: 100%; }
+        .round-dates-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .round-date-tag { background: #1d6f9c; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+        .round-date-tag .rm { cursor: pointer; opacity: 0.85; }
+        .round-date-tag .rm:hover { opacity: 1; }
+        .custom-plan-grid { display: flex; flex-wrap: wrap; gap: 8px; max-height: 380px; overflow-y: auto; padding: 8px 0; }
+        .custom-res-item { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; border: 2px solid #d5dce8; background: #fff; font-size: 13px; cursor: pointer; }
+        .custom-res-item.checked { border-color: #1f8b4c; background: #eafaf0; }
+        .custom-res-item input { accent-color: #1f8b4c; cursor: pointer; }
         @media (max-width: 700px) { .container { padding: 20px 16px; } .stats-grid { flex-direction: column; align-items: stretch; } .user-info { margin-left: 0; } .log-item { flex-wrap: wrap; } .log-item .log-time { min-width: auto; } .summary-filters { flex-direction: column; align-items: stretch; } .participant-grid { gap: 6px; } .participant-item { padding: 4px 10px 4px 6px; font-size: 13px; } }
     </style>
 </head>
@@ -137,12 +149,12 @@
 
 <div id="mainContainer" class="container hidden">
     <h1>🚦 指挥中心测评系统 <span style="font-size:0.9rem;font-weight:400;color:#3a6b8e;">© 科技信息指挥中心</span></h1>
-    <div class="subhead">⏳ 每周一重置 · 工作日每天抽取 · 一周全量覆盖</div>
+    <div class="subhead">⏳ 管理员选择本轮日期 · 系统按日期均衡分配 · 一轮全量覆盖</div>
 
     <div class="stats-grid">
         <div class="stats-item"><strong>📊 总资源</strong> <span class="num" id="totalCount">0</span></div>
-        <div class="stats-item"><strong>✅ 本周已抽</strong> <span class="num" id="todayCount">0</span></div>
-        <div class="stats-item"><strong>📅 本周剩余</strong> <span class="num" id="remainCount">0</span></div>
+        <div class="stats-item"><strong>✅ 本轮已抽</strong> <span class="num" id="todayCount">0</span></div>
+        <div class="stats-item"><strong>📅 本轮剩余</strong> <span class="num" id="remainCount">0</span></div>
         <div class="stats-item"><strong>🚗 路段</strong> <span class="num" id="roadTotal">0</span></div>
         <div class="stats-item"><strong>🚦 路口</strong> <span class="num" id="crossTotal">0</span></div>
         <div class="user-info">
@@ -152,10 +164,10 @@
     </div>
 
     <div class="action-bar">
-        <button class="btn btn-primary" id="drawWeekBtn">🎲 抽取整周</button>
-        <button class="btn btn-outline" id="resetBtn" style="display:none;">🔄 重置本周</button>
+        <button class="btn btn-primary" id="drawWeekBtn">🎲 按本轮日期抽取</button>
+        <button class="btn btn-outline" id="resetBtn" style="display:none;">🔄 重置本轮</button>
         <button class="btn btn-success" id="exportBtn">📥 导出 CSV</button>
-        <button class="btn btn-warning" id="importWeekBtn" style="display:none;">📤 导入本周点位</button>
+        <button class="btn btn-warning" id="importWeekBtn" style="display:none;">📤 导入本轮点位</button>
         <button class="btn btn-admin" id="adminToggleBtn">⚙️ 管理</button>
         <button class="btn btn-assessment" id="assessmentBtn">📝 数据填写</button>
         <span class="draw-info" id="drawInfo">📌 均衡分配：路口权重1.0，路段权重0.5</span>
@@ -168,6 +180,8 @@
             <button class="tab-btn active" data-tab="tab-users">👥 用户管理</button>
             <button class="tab-btn" data-tab="tab-resources">📋 资源管理</button>
             <button class="tab-btn" data-tab="tab-plan">📦 方案切换</button>
+            <button class="tab-btn" data-tab="tab-round">📅 轮次设置</button>
+            <button class="tab-btn" data-tab="tab-custom">🧩 自定义方案</button>
             <button class="tab-btn" data-tab="tab-participants">👥 参与用户</button>
             <button class="tab-btn" data-tab="tab-logs">📜 操作日志</button>
             <button class="tab-btn" data-tab="tab-summary">📊 数据汇总</button>
@@ -205,11 +219,11 @@
             </div>
         </div>
 
-        <!-- 方案切换选项卡 -->
+        <!-- 方案切换 -->
         <div id="tab-plan" class="tab-content">
             <h4 style="margin:0 0 12px 0;">📦 资源方案切换</h4>
             <div style="background:#f0f5fe;padding:16px;border-radius:12px;margin-bottom:16px;">
-                <p style="margin:0 0 12px 0;color:#5a7a92;font-size:14px;">选择本周使用的资源方案，切换后需要重新抽取本周点位。</p>
+                <p style="margin:0 0 12px 0;color:#5a7a92;font-size:14px;">选择本轮使用的资源方案，切换后需要重新抽取本轮点位。</p>
                 <div id="planSelector" style="display:flex;gap:16px;flex-wrap:wrap;">
                     <div class="plan-option" data-plan="plan_a">
                         <input type="radio" name="plan" value="plan_a" id="plan_a">
@@ -220,20 +234,84 @@
                         <label for="plan_b">📋 方案B（42个资源：8路段 + 34路口）</label>
                     </div>
                 </div>
+                <div id="customPlanList" style="margin-top:12px;"></div>
                 <button class="btn btn-primary" id="activatePlanBtn" style="margin-top:12px;">✅ 激活所选方案</button>
                 <span id="planStatus" style="margin-left:16px;font-size:14px;color:#1f8b4c;"></span>
             </div>
+        </div>
+
+        <!-- 轮次设置 -->
+        <div id="tab-round" class="tab-content">
+            <h4 style="margin:0 0 12px 0;">📅 本轮日期设置</h4>
+            <div class="round-box">
+                <label>轮次标识（本轮唯一名称）</label>
+                <input type="text" id="roundKeyInput" placeholder="例如：2026-10-05_round">
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+                    <div>
+                        <label>选择日期（可多选，支持调休，不自动跳过周末）</label>
+                        <input type="text" id="roundDatePicker" placeholder="点击选择日期" style="width:280px;">
+                    </div>
+                    <button class="btn btn-outline" id="clearRoundDates" style="padding:8px 18px;">🗑️ 清空</button>
+                    <button class="btn btn-success" id="saveRoundBtn" style="padding:8px 20px;">💾 保存本轮日期</button>
+                </div>
+                <div class="round-dates-tags" id="roundDatesTags"></div>
+            </div>
             <div style="font-size:13px;color:#6a8ba5;background:#f8faff;padding:12px 16px;border-radius:8px;">
-                💡 切换方案后，系统会自动使用新方案进行抽取。已存在的抽取记录不会被删除，但重新抽取时会使用新方案。
+                💡 保存后，点主界面「🎲 按本轮日期抽取」时系统会按你选的这些日期分配点位。
+                日期可以是不连续的（例如周一、周三、周五），系统会按所选天数平均分配。
+            </div>
+            <div style="margin-top:16px;">
+                <h4 style="margin:0 0 10px 0;">📋 已保存的轮次</h4>
+                <div class="table-wrap resource-list-wrap">
+                    <table>
+                        <thead><tr><th>轮次标识</th><th>方案</th><th>日期</th><th>创建人</th><th>操作</th></tr></thead>
+                        <tbody id="roundListBody"><tr><td colspan="5" class="empty-state">加载中...</td></tr></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <!-- 参与用户选项卡 -->
+        <!-- 自定义方案 -->
+        <div id="tab-custom" class="tab-content">
+            <h4 style="margin:0 0 12px 0;">🧩 新建自定义方案</h4>
+            <div class="round-box">
+                <label>方案名称</label>
+                <input type="text" id="customPlanName" placeholder="例如：只测这10个路口">
+                <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                    <span style="font-size:13px;color:#5a7a92;">当前基础方案：</span>
+                    <select id="customBasePlan" style="padding:6px 12px;border:2px solid #d5dce8;border-radius:8px;">
+                        <option value="plan_a">方案A（70个资源）</option>
+                        <option value="plan_b">方案B（42个资源）</option>
+                    </select>
+                    <button class="btn btn-outline" id="loadCustomResourcesBtn" style="padding:6px 16px;font-size:0.85rem;">🔄 加载资源</button>
+                    <button class="btn btn-outline" id="selectAllCustomBtn" style="padding:6px 16px;font-size:0.85rem;">✅ 全选</button>
+                    <button class="btn btn-outline" id="selectNoneCustomBtn" style="padding:6px 16px;font-size:0.85rem;">❌ 全不选</button>
+                </div>
+                <div class="custom-plan-grid" id="customResourceGrid">
+                    <div style="width:100%;text-align:center;padding:16px;color:#5a7a92;">请先点「加载资源」</div>
+                </div>
+                <div style="margin-top:12px;">
+                    <button class="btn btn-success" id="saveCustomPlanBtn">💾 保存自定义方案</button>
+                    <span id="customPlanStatus" style="margin-left:14px;font-size:13px;color:#1f8b4c;"></span>
+                </div>
+            </div>
+            <div style="margin-top:16px;">
+                <h4 style="margin:0 0 10px 0;">📋 已保存的自定义方案</h4>
+                <div class="table-wrap resource-list-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>名称</th><th>资源数</th><th>创建人</th><th>操作</th></tr></thead>
+                        <tbody id="customPlanListBody"><tr><td colspan="5" class="empty-state">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 参与用户 -->
         <div id="tab-participants" class="tab-content">
-            <h4 style="margin:0 0 12px 0;">👥 本周参与测评的用户</h4>
+            <h4 style="margin:0 0 12px 0;">👥 本轮参与测评的用户</h4>
             <div style="background:#f0f5fe;padding:12px 16px;border-radius:12px;margin-bottom:16px;">
                 <span>已选 <strong id="selectedCount" style="color:#1d6f9c;font-size:18px;">0</strong> 人</span>
-                <span style="margin-left:20px;color:#5a7a92;">📅 本周：<strong id="participantWeekKey">--</strong></span>
+                <span style="margin-left:20px;color:#5a7a92;">📅 本轮：<strong id="participantWeekKey">--</strong></span>
                 <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
                     <button class="btn btn-primary" id="selectAllParticipants" style="padding:4px 18px;font-size:0.85rem;">✅ 全选</button>
                     <button class="btn btn-outline" id="selectNoneParticipants" style="padding:4px 18px;font-size:0.85rem;">❌ 全不选</button>
@@ -242,10 +320,6 @@
             </div>
             <div class="participant-grid" id="participantList">
                 <div style="width:100%;text-align:center;padding:20px;color:#5a7a92;">加载中...</div>
-            </div>
-            <div style="margin-top:12px;font-size:12px;color:#6a8ba5;background:#f8faff;padding:10px 16px;border-radius:8px;">
-                💡 勾选参与的用户才会被分配点位。未勾选的用户本周不参与测评。<br>
-                📐 工作量计算：路口权重 = 1.0，路段权重 = 0.5（2个路段 = 1个路口）
             </div>
         </div>
 
@@ -274,12 +348,12 @@
             </div>
         </div>
 
-        <!-- 导出选项卡 -->
+        <!-- 导出 -->
         <div id="tab-export" class="tab-content">
             <h4 style="margin:0 0 12px 0;">📤 导出数据</h4>
-            
+
             <div style="background:#f0f5fe;padding:16px;border-radius:12px;margin-bottom:16px;">
-                <div style="font-weight:600;margin-bottom:8px;">📋 导出测评数据</div>
+                <div style="font-weight:600;margin-bottom:8px;">📋 导出测评数据（表格）</div>
                 <div class="export-actions">
                     <button class="btn btn-success" id="exportAllAssessments">📥 导出全部测评数据</button>
                     <button class="btn btn-primary" id="exportTodayAssessments">📥 导出今日测评数据</button>
@@ -288,10 +362,21 @@
                 </div>
             </div>
 
+            <div style="background:#fff3cd;padding:16px;border-radius:12px;margin-bottom:16px;border:2px solid #ffc107;">
+                <div style="font-weight:600;margin-bottom:8px;">📦 按天导出（数据 + 图片打包 zip）</div>
+                <div class="export-actions">
+                    <input type="date" id="exportWithImagesDate" style="padding:4px 8px;border:2px solid #d5dce8;border-radius:6px;font-size:0.85rem;">
+                    <button class="btn btn-danger" id="exportWithImagesBtn">📦 导出该日数据 + 图片</button>
+                </div>
+                <div style="font-size:12px;color:#856404;margin-top:8px;">
+                    💡 会导出当天所有测评数据（xlsx）以及当天上传的所有图片，打包成一个 zip 下载。
+                </div>
+            </div>
+
             <div style="background:#f0f5fe;padding:16px;border-radius:12px;">
                 <div style="font-weight:600;margin-bottom:8px;">📋 导出抽取记录</div>
                 <div class="export-actions">
-                    <button class="btn btn-success" id="exportAllDrawRecords">📥 导出本周全部抽取</button>
+                    <button class="btn btn-success" id="exportAllDrawRecords">📥 导出本轮全部抽取</button>
                     <input type="date" id="exportDrawDate" style="padding:4px 8px;border:2px solid #d5dce8;border-radius:6px;font-size:0.85rem;">
                     <button class="btn btn-warning" id="exportDateDrawRecords">📥 导出指定日期抽取</button>
                 </div>
@@ -308,13 +393,15 @@
         <div class="legend">
             <span class="l-road">路段</span>
             <span class="l-cross">路口</span>
-            <span>🔹 每周一重置 · 工作日抽取 · 一周全量覆盖</span>
+            <span>🔹 管理员选日期 · 按天均衡抽取 · 一轮全量覆盖</span>
         </div>
         <span>路段 <span id="footerRoadTotal">0</span>个 + 路口 <span id="footerCrossTotal">0</span>个</span>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
 <script>
 (function() {
     'use strict';
@@ -326,6 +413,10 @@
     let drawnRecords = [];
     let groupedRecords = {};
     let currentPlanKey = 'plan_a';
+    let currentRoundKey = '';
+    let selectedRoundDates = [];
+    let flatpickrInstance = null;
+    let customResourceList = [];
 
     // DOM
     const loginContainer = document.getElementById('loginContainer');
@@ -384,13 +475,55 @@
     const exportAllDrawRecords = document.getElementById('exportAllDrawRecords');
     const exportDrawDate = document.getElementById('exportDrawDate');
     const exportDateDrawRecords = document.getElementById('exportDateDrawRecords');
+    const exportWithImagesDate = document.getElementById('exportWithImagesDate');
+    const exportWithImagesBtn = document.getElementById('exportWithImagesBtn');
 
-    // 方案切换
+    // 方案
     const planSelector = document.getElementById('planSelector');
     const activatePlanBtn = document.getElementById('activatePlanBtn');
     const planStatus = document.getElementById('planStatus');
+    const customPlanList = document.getElementById('customPlanList');
 
-    // Tab切换
+    // 轮次
+    const roundKeyInput = document.getElementById('roundKeyInput');
+    const roundDatePicker = document.getElementById('roundDatePicker');
+    const roundDatesTags = document.getElementById('roundDatesTags');
+    const saveRoundBtn = document.getElementById('saveRoundBtn');
+    const clearRoundDates = document.getElementById('clearRoundDates');
+    const roundListBody = document.getElementById('roundListBody');
+
+    // 自定义方案
+    const customPlanName = document.getElementById('customPlanName');
+    const customBasePlan = document.getElementById('customBasePlan');
+    const loadCustomResourcesBtn = document.getElementById('loadCustomResourcesBtn');
+    const selectAllCustomBtn = document.getElementById('selectAllCustomBtn');
+    const selectNoneCustomBtn = document.getElementById('selectNoneCustomBtn');
+    const customResourceGrid = document.getElementById('customResourceGrid');
+    const saveCustomPlanBtn = document.getElementById('saveCustomPlanBtn');
+    const customPlanStatus = document.getElementById('customPlanStatus');
+    const customPlanListBody = document.getElementById('customPlanListBody');
+
+    // ===== 通用请求 =====
+    async function apiGet(url) {
+        const resp = await fetch(API_BASE + url, { credentials: 'include' });
+        if (!resp.ok) throw new Error('请求失败: ' + resp.status);
+        return resp.json();
+    }
+    async function apiPost(url, body) {
+        const resp = await fetch(API_BASE + url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(body || {})
+        });
+        return resp.json();
+    }
+    async function apiDelete(url) {
+        const resp = await fetch(API_BASE + url, { method: 'DELETE', credentials: 'include' });
+        return resp.json();
+    }
+
+    // ===== Tab 切换 =====
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -403,14 +536,15 @@
             if (this.dataset.tab === 'tab-summary') { loadSummary(summaryStartDate.value, summaryEndDate.value); }
             if (this.dataset.tab === 'tab-participants') loadParticipants();
             if (this.dataset.tab === 'tab-plan') loadPlans();
+            if (this.dataset.tab === 'tab-round') loadRounds();
+            if (this.dataset.tab === 'tab-custom') loadCustomPlans();
         });
     });
 
     // ===== 登录 =====
     async function checkAuth() {
         try {
-            const resp = await fetch(API_BASE + '/api/check-auth');
-            const data = await resp.json();
+            const data = await apiGet('/api/check-auth');
             if (data.loggedIn) {
                 currentUser = data.user;
                 showMain();
@@ -433,7 +567,6 @@
         mainContainer.classList.remove('hidden');
         if (currentUser) {
             currentUserSpan.textContent = '👤 ' + currentUser.username;
-            
             if (currentUser.role === 'admin') {
                 drawWeekBtn.style.display = 'inline-flex';
                 resetBtn.style.display = 'inline-flex';
@@ -461,12 +594,7 @@
         loginError.textContent = '';
         if (!username || !password) { loginError.textContent = '请输入用户名和密码'; return; }
         try {
-            const resp = await fetch(API_BASE + '/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            const data = await resp.json();
+            const data = await apiPost('/api/login', { username, password });
             if (data.success) {
                 currentUser = data.user;
                 localStorage.setItem('assessment_user', currentUser.username);
@@ -480,7 +608,7 @@
     }
 
     async function doLogout() {
-        try { await fetch(API_BASE + '/api/logout', { method: 'POST' }); } catch (e) {}
+        try { await apiPost('/api/logout', {}); } catch (e) {}
         currentUser = null;
         localStorage.removeItem('assessment_user');
         showLogin();
@@ -504,11 +632,10 @@
         return days[d.getDay()];
     }
 
-    // ===== 加载当前激活方案 =====
+    // ===== 方案 =====
     async function loadActivePlan() {
         try {
-            const resp = await fetch(API_BASE + '/api/active-plan', { credentials: 'include' });
-            const data = await resp.json();
+            const data = await apiGet('/api/active-plan');
             if (data) {
                 currentPlanKey = data.plan_key;
                 document.querySelectorAll('.plan-option').forEach(el => {
@@ -518,55 +645,58 @@
                 });
                 planStatus.textContent = '✅ 当前激活：' + data.plan_name;
             }
-        } catch (e) {
-            console.error('加载方案失败:', e);
-        }
+        } catch (e) { console.error('加载方案失败:', e); }
     }
 
-    // ===== 加载方案列表 =====
     async function loadPlans() {
         try {
-            const resp = await fetch(API_BASE + '/api/resource-plans', { credentials: 'include' });
-            const plans = await resp.json();
-            
+            const plans = await apiGet('/api/resource-plans');
             plans.forEach(p => {
                 const radio = document.querySelector(`input[name="plan"][value="${p.plan_key}"]`);
                 if (radio) radio.checked = p.is_active === 1;
                 const option = document.querySelector(`.plan-option[data-plan="${p.plan_key}"]`);
                 if (option) option.classList.toggle('active', p.is_active === 1);
             });
-            
             const active = plans.find(p => p.is_active === 1);
-            if (active) {
-                planStatus.textContent = '✅ 当前激活：' + active.plan_name;
-            }
-        } catch (e) {
-            console.error('加载方案列表失败:', e);
-        }
+            if (active) planStatus.textContent = '✅ 当前激活：' + active.plan_name;
+            await renderCustomPlanSelector();
+        } catch (e) { console.error('加载方案列表失败:', e); }
     }
 
-    // ===== 激活方案 =====
+    async function renderCustomPlanSelector() {
+        try {
+            const list = await apiGet('/api/custom-plans');
+            if (!list || list.length === 0) { customPlanList.innerHTML = ''; return; }
+            let html = '<div style="font-size:13px;color:#5a7a92;margin-bottom:6px;">🧩 自定义方案：</div><div style="display:flex;gap:12px;flex-wrap:wrap;">';
+            list.forEach(p => {
+                html += `<div class="plan-option" data-plan="custom_${p.id}">
+                    <input type="radio" name="plan" value="custom_${p.id}" id="custom_${p.id}">
+                    <label for="custom_${p.id}">🧩 ${p.plan_name}（${p.resource_ids.length}个）</label>
+                </div>`;
+            });
+            html += '</div>';
+            customPlanList.innerHTML = html;
+            customPlanList.querySelectorAll('.plan-option').forEach(el => {
+                el.addEventListener('click', function() {
+                    const radio = this.querySelector('input[type="radio"]');
+                    if (radio) radio.checked = true;
+                    document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        } catch (e) { console.error(e); }
+    }
+
     async function activatePlan() {
         const selected = document.querySelector('input[name="plan"]:checked');
-        if (!selected) {
-            alert('请先选择一个方案');
-            return;
-        }
+        if (!selected) { alert('请先选择一个方案'); return; }
         const planKey = selected.value;
         const planName = document.querySelector(`label[for="${planKey}"]`)?.textContent || planKey;
-        
-        if (!confirm(`确认切换到 "${planName}"？\n\n切换后需要重新抽取本周点位。`)) return;
-        
+        if (!confirm(`确认切换到 "${planName}"？\n\n切换后需要重新抽取本轮点位。`)) return;
         try {
-            const resp = await fetch(API_BASE + '/api/resource-plans/activate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ planKey })
-            });
-            const result = await resp.json();
+            const result = await apiPost('/api/resource-plans/activate', { planKey });
             if (result.success) {
-                alert('✅ 方案切换成功！请重新抽取本周点位。');
+                alert('✅ 方案切换成功！请重新抽取本轮点位。');
                 currentPlanKey = planKey;
                 loadActivePlan();
                 loadData();
@@ -575,8 +705,174 @@
             } else {
                 alert('❌ 切换失败：' + (result.message || '未知错误'));
             }
+        } catch (e) { alert('❌ 切换失败：' + e.message); }
+    }
+
+    // ===== 轮次设置 =====
+    function renderRoundDateTags() {
+        roundDatesTags.innerHTML = selectedRoundDates
+            .slice().sort()
+            .map(d => `<span class="round-date-tag">${d} (${getDayLabel(d)})<span class="rm" data-date="${d}">✕</span></span>`)
+            .join('');
+        roundDatesTags.querySelectorAll('.rm').forEach(el => {
+            el.addEventListener('click', function() {
+                const d = this.dataset.date;
+                selectedRoundDates = selectedRoundDates.filter(x => x !== d);
+                if (flatpickrInstance) flatpickrInstance.setDate(selectedRoundDates, false);
+                renderRoundDateTags();
+            });
+        });
+    }
+
+    function initFlatpickr() {
+        if (flatpickrInstance) return;
+        flatpickrInstance = flatpickr(roundDatePicker, {
+            mode: 'multiple',
+            dateFormat: 'Y-m-d',
+            locale: (window.flatpickr && flatpickr.l10ns && flatpickr.l10ns.zh) ? 'zh' : 'default',
+            onChange: function(selectedDates) {
+                selectedRoundDates = selectedDates.map(d => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${dd}`;
+                });
+                renderRoundDateTags();
+            }
+        });
+    }
+
+    async function loadRounds() {
+        try {
+            const rows = await apiGet('/api/draw-rounds');
+            if (!rows || rows.length === 0) {
+                roundListBody.innerHTML = '<tr><td colspan="5" class="empty-state">暂无轮次</td></tr>';
+                return;
+            }
+            roundListBody.innerHTML = rows.map(r => `
+                <tr>
+                    <td><strong>${r.round_key}</strong></td>
+                    <td>${r.plan_key}</td>
+                    <td>${r.dates.map(d => d + '(' + getDayLabel(d) + ')').join(', ')}</td>
+                    <td>${r.created_by || ''}</td>
+                    <td>
+                        <button class="btn btn-outline" style="padding:2px 12px;font-size:0.8rem;" data-load-round="${r.round_key}">载入</button>
+                        <button class="btn btn-danger" style="padding:2px 12px;font-size:0.8rem;" data-del-round="${r.round_key}">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+            roundListBody.querySelectorAll('[data-load-round]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const key = this.dataset.loadRound;
+                    const row = rows.find(x => x.round_key === key);
+                    if (!row) return;
+                    roundKeyInput.value = row.round_key;
+                    selectedRoundDates = row.dates.slice();
+                    if (flatpickrInstance) flatpickrInstance.setDate(selectedRoundDates, false);
+                    renderRoundDateTags();
+                });
+            });
+            roundListBody.querySelectorAll('[data-del-round]').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const key = this.dataset.delRound;
+                    if (!confirm('确认删除轮次 ' + key + '？')) return;
+                    await apiDelete('/api/draw-rounds/' + encodeURIComponent(key));
+                    loadRounds();
+                });
+            });
         } catch (e) {
-            alert('❌ 切换失败：' + e.message);
+            roundListBody.innerHTML = '<tr><td colspan="5" class="empty-state">❌ 加载失败</td></tr>';
+        }
+    }
+
+    async function saveRound() {
+        const roundKey = roundKeyInput.value.trim();
+        if (!roundKey) { alert('请填写轮次标识'); return; }
+        if (selectedRoundDates.length === 0) { alert('请至少选择一个日期'); return; }
+        const result = await apiPost('/api/draw-rounds', {
+            roundKey,
+            planKey: currentPlanKey,
+            dates: selectedRoundDates.slice().sort()
+        });
+        if (result.success) {
+            currentRoundKey = roundKey;
+            alert('✅ 本轮日期已保存！点主界面「🎲 按本轮日期抽取」即可按这些日期抽取。');
+            loadRounds();
+        } else {
+            alert('❌ 保存失败：' + (result.error || '未知错误'));
+        }
+    }
+
+    // ===== 自定义方案 =====
+    async function loadCustomResources() {
+        const base = customBasePlan.value;
+        customResourceGrid.innerHTML = '<div style="width:100%;text-align:center;padding:16px;">⏳ 加载中...</div>';
+        try {
+            const list = await apiGet('/api/resources?planKey=' + base);
+            customResourceList = list;
+            if (!list || list.length === 0) {
+                customResourceGrid.innerHTML = '<div style="width:100%;text-align:center;padding:16px;color:#999;">无资源</div>';
+                return;
+            }
+            customResourceGrid.innerHTML = list.map(r =>
+                `<label class="custom-res-item" data-id="${r.id}">
+                    <input type="checkbox" value="${r.id}">
+                    <span>${r.id} · ${r.name} <em style="color:#5a7a92;font-style:normal;">(${r.type_label})</em></span>
+                </label>`
+            ).join('');
+            customResourceGrid.querySelectorAll('.custom-res-item').forEach(item => {
+                const cb = item.querySelector('input');
+                cb.addEventListener('change', () => {
+                    item.classList.toggle('checked', cb.checked);
+                });
+            });
+        } catch (e) {
+            customResourceGrid.innerHTML = '<div style="width:100%;text-align:center;padding:16px;color:#c73b3b;">❌ 加载失败</div>';
+        }
+    }
+
+    async function saveCustomPlan() {
+        const name = customPlanName.value.trim();
+        if (!name) { alert('请填写方案名称'); return; }
+        const ids = Array.from(customResourceGrid.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        if (ids.length === 0) { alert('请至少勾选一个资源'); return; }
+        const result = await apiPost('/api/custom-plans', { planName: name, resourceIds: ids });
+        if (result.success) {
+            customPlanStatus.textContent = '✅ 已保存：' + result.planKey + '（' + ids.length + '个资源）';
+            customPlanName.value = '';
+            loadCustomPlans();
+            renderCustomPlanSelector();
+        } else {
+            alert('❌ 保存失败：' + (result.error || '未知错误'));
+        }
+    }
+
+    async function loadCustomPlans() {
+        try {
+            const rows = await apiGet('/api/custom-plans');
+            if (!rows || rows.length === 0) {
+                customPlanListBody.innerHTML = '<tr><td colspan="5" class="empty-state">暂无自定义方案</td></tr>';
+                return;
+            }
+            customPlanListBody.innerHTML = rows.map(r => `
+                <tr>
+                    <td>custom_${r.id}</td>
+                    <td>${r.plan_name}</td>
+                    <td>${r.resource_ids.length}</td>
+                    <td>${r.created_by || ''}</td>
+                    <td><button class="btn btn-danger" style="padding:2px 12px;font-size:0.8rem;" data-del-cp="${r.id}">删除</button></td>
+                </tr>
+            `).join('');
+            customPlanListBody.querySelectorAll('[data-del-cp]').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    if (!confirm('确认删除该自定义方案？')) return;
+                    await apiDelete('/api/custom-plans/' + this.dataset.delCp);
+                    loadCustomPlans();
+                    renderCustomPlanSelector();
+                });
+            });
+        } catch (e) {
+            customPlanListBody.innerHTML = '<tr><td colspan="5" class="empty-state">❌ 加载失败</td></tr>';
         }
     }
 
@@ -586,17 +882,14 @@
         weekKey = getWeekKey();
         statusText.textContent = '🔄 加载中...';
         try {
-            const planResp = await fetch(API_BASE + '/api/active-plan', { credentials: 'include' });
-            const planData = await planResp.json();
+            const planData = await apiGet('/api/active-plan');
             currentPlanKey = planData ? planData.plan_key : 'plan_a';
-            
-            const [resourcesRes, recordsRes] = await Promise.all([
-                fetch(API_BASE + '/api/resources?planKey=' + currentPlanKey, { credentials: 'include' }),
-                fetch(API_BASE + '/api/records/' + weekKey, { credentials: 'include' })
+
+            const [resources, recordsData] = await Promise.all([
+                apiGet('/api/resources?planKey=' + currentPlanKey),
+                apiGet('/api/records/' + weekKey)
             ]);
-            if (!resourcesRes.ok || !recordsRes.ok) throw new Error('加载失败');
-            allResources = await resourcesRes.json();
-            const recordsData = await recordsRes.json();
+            allResources = resources || [];
             drawnRecords = recordsData.records || [];
             groupedRecords = recordsData.grouped || {};
             renderAll();
@@ -607,7 +900,6 @@
         }
     }
 
-    // ===== 渲染 =====
     function renderAll() {
         const roads = allResources.filter(r => r.type === 'road');
         const crosses = allResources.filter(r => r.type === 'cross');
@@ -624,7 +916,7 @@
         footerCrossTotal.textContent = crosses.length;
 
         if (drawnRecords.length === 0) {
-            tableBody.innerHTML = '<div class="empty-state">📭 本周暂无抽取记录</div>';
+            tableBody.innerHTML = '<div class="empty-state">📭 本轮暂无抽取记录</div>';
             return;
         }
 
@@ -641,39 +933,31 @@
             html += '<thead><tr><th style="width:50px;">#</th><th>名称</th><th>类型</th><th>区域</th><th>分配人</th></tr></thead><tbody>';
             rows.forEach((r, idx) => {
                 const badgeClass = r.type === 'road' ? 'badge-road' : 'badge-cross';
-                const assignedTo = r.assigned_to || '';
-                html += '<tr><td>' + (idx + 1) + '</td><td><strong>' + r.name + '</strong></td><td><span class="badge ' + badgeClass + '">' + r.type_label + '</span></td><td>' + (r.area || '') + '</td><td>' + assignedTo + '</td></tr>';
+                html += '<tr><td>' + (idx + 1) + '</td><td><strong>' + r.name + '</strong></td><td><span class="badge ' + badgeClass + '">' + r.type_label + '</span></td><td>' + (r.area || '') + '</td><td>' + (r.assigned_to || '') + '</td></tr>';
             });
             html += '</tbody></table></div></div>';
         });
         tableBody.innerHTML = html;
     }
 
-    // ===== 批量抽取整周 =====
+    // ===== 抽取 =====
     async function doDrawWeek() {
+        if (!currentRoundKey && roundKeyInput.value.trim()) {
+            currentRoundKey = roundKeyInput.value.trim();
+        }
+        if (!currentRoundKey) {
+            if (!confirm('还没有选择本轮日期，是否按默认（本周一~周五）抽取？\n\n建议先到「管理 → 轮次设置」里选择日期。')) return;
+        }
         drawWeekBtn.disabled = true;
         drawWeekBtn.textContent = '⏳ 抽取中...';
         try {
-            const resp = await fetch(API_BASE + '/api/draw-week', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ weekKey, planKey: currentPlanKey })
+            const result = await apiPost('/api/draw-week', {
+                weekKey,
+                planKey: currentPlanKey,
+                roundKey: currentRoundKey || undefined
             });
-            const result = await resp.json();
             if (result.success) {
-                let detailMsg = result.dailyStats.map(d => 
-                    d.date + '(' + d.dayOfWeek + '): ' + d.total + '个'
-                ).join('\n');
-                
-                let workMsg = '';
-                if (result.userWorkload) {
-                    workMsg = '\n\n📊 工作量分配：\n' + result.userWorkload.map(u => 
-                        u.username + ': 路口' + u.crossCount + '个 + 路段' + u.roadCount + '个 = ' + u.totalWork.toFixed(1)
-                    ).join(' | ');
-                }
-                
-                alert('✅ ' + result.message + '\n\n📋 每日详情：\n' + detailMsg + workMsg);
+                alert('✅ ' + result.message);
                 await loadData();
             } else {
                 alert('⚠️ ' + result.message);
@@ -681,15 +965,14 @@
         } catch (e) { alert('❌ 抽取失败：' + e.message); }
         finally {
             drawWeekBtn.disabled = false;
-            drawWeekBtn.textContent = '🎲 抽取整周';
+            drawWeekBtn.textContent = '🎲 按本轮日期抽取';
         }
     }
 
     async function doReset() {
-        if (!confirm('⚠️ 确认重置本周所有抽取记录？')) return;
+        if (!confirm('⚠️ 确认重置本轮所有抽取记录？')) return;
         try {
-            const resp = await fetch(API_BASE + '/api/reset/' + weekKey, { method: 'DELETE' });
-            const result = await resp.json();
+            const result = await apiDelete('/api/reset/' + weekKey);
             if (result.success) { alert('✅ 已删除 ' + result.deleted + ' 条记录'); await loadData(); }
         } catch (e) { alert('❌ 重置失败'); }
     }
@@ -709,200 +992,109 @@
         URL.revokeObjectURL(link.href);
     }
 
-    // ===== 导入本周点位 =====
+    // ===== 导入本轮点位（保持原逻辑） =====
     function doImportWeek() {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = '.xlsx,.xls';
         fileInput.style.display = 'none';
         document.body.appendChild(fileInput);
-        
+
         fileInput.addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
-            
             try {
                 const data = await file.arrayBuffer();
                 const workbook = XLSX.read(data, { type: 'array' });
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                
-                // 解析数据
+
                 const records = [];
                 let dateCol = -1, nameCol = -1, assignCol = -1;
                 let headerFound = false;
-                
-                // 先获取当前方案的所有资源
-                const planResp = await fetch('/api/active-plan', { credentials: 'include' });
-                const planData = await planResp.json();
+
+                const planData = await apiGet('/api/active-plan');
                 const planKey = planData ? planData.plan_key : 'plan_a';
-                
-                const resResp = await fetch('/api/resources?planKey=' + planKey, { credentials: 'include' });
-                const allResources = await resResp.json();
-                
+                const allRes = await apiGet('/api/resources?planKey=' + planKey);
+
                 for (const row of rows) {
                     if (row.length < 3) continue;
-                    
-                    const firstCell = String(row[0] || '');
-                    
-                    // 检测表头
                     if (!headerFound) {
                         for (let i = 0; i < row.length; i++) {
                             const cell = String(row[i] || '').trim();
-                            if (cell.includes('日期') || cell === '日期') dateCol = i;
-                            if (cell.includes('名称') || cell === '名称' || cell.includes('点位')) nameCol = i;
-                            if (cell.includes('分配人') || cell === '分配人' || cell.includes('责任人')) assignCol = i;
+                            if (cell.includes('日期')) dateCol = i;
+                            if (cell.includes('名称') || cell.includes('点位')) nameCol = i;
+                            if (cell.includes('分配人') || cell.includes('责任人')) assignCol = i;
                         }
-                        if (dateCol >= 0 && nameCol >= 0) {
-                            headerFound = true;
-                            continue;
-                        }
+                        if (dateCol >= 0 && nameCol >= 0) { headerFound = true; continue; }
                     }
-                    
-                    if (!headerFound && row.length >= 5) {
-                        headerFound = true;
-                        dateCol = 1;
-                        nameCol = 3;
-                        assignCol = 6;
-                    }
-                    
+                    if (!headerFound && row.length >= 5) { headerFound = true; dateCol = 1; nameCol = 3; assignCol = 6; }
                     if (dateCol < 0 || nameCol < 0) continue;
-                    
-                    // 解析日期
+
                     let dateStr = '';
                     const dateCell = row[dateCol];
                     if (dateCell !== undefined && dateCell !== null) {
                         if (typeof dateCell === 'number') {
                             const excelEpoch = new Date(1899, 11, 30);
-                            const days = parseFloat(dateCell);
-                            const d = new Date(excelEpoch.getTime() + days * 86400000);
-                            const year = d.getFullYear();
-                            const month = String(d.getMonth() + 1).padStart(2, '0');
-                            const day = String(d.getDate()).padStart(2, '0');
-                            dateStr = `${year}-${month}-${day}`;
+                            const d = new Date(excelEpoch.getTime() + parseFloat(dateCell) * 86400000);
+                            dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
                         } else if (typeof dateCell === 'string') {
-                            const trimmed = dateCell.trim();
-                            const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-                            if (match) {
-                                dateStr = `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
-                            } else {
-                                const d = new Date(trimmed);
-                                if (!isNaN(d.getTime())) {
-                                    dateStr = d.toISOString().slice(0, 10);
-                                }
-                            }
+                            const match = dateCell.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                            if (match) dateStr = `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+                            else { const d = new Date(dateCell.trim()); if (!isNaN(d.getTime())) dateStr = d.toISOString().slice(0, 10); }
                         }
                     }
-                    
-                    if (!dateStr) {
-                        console.warn('无法解析日期:', dateCell);
-                        continue;
-                    }
-                    
+                    if (!dateStr) continue;
                     const name = String(row[nameCol] || '').trim();
                     const assignedTo = assignCol >= 0 ? String(row[assignCol] || '').trim() : '';
-                    
-                    if (!name || !dateStr) continue;
-                    
-                    // 查找对应的资源
-                    let resource = allResources.find(r => r.name === name);
-                    if (!resource) {
-                        console.warn('未找到资源:', name);
-                        continue;
-                    }
-                    
-                    records.push({
-                        resource_id: resource.id,
-                        draw_date: dateStr,
-                        week_key: weekKey,
-                        assigned_to: assignedTo || ''
-                    });
+                    if (!name) continue;
+                    const resource = allRes.find(r => r.name === name);
+                    if (!resource) continue;
+                    records.push({ resource_id: resource.id, draw_date: dateStr, week_key: weekKey, assigned_to: assignedTo || '' });
                 }
-                
-                if (records.length === 0) {
-                    alert('⚠️ 没有解析到有效数据，请检查文件格式');
-                    return;
-                }
-                
-                // 预览
+
+                if (records.length === 0) { alert('⚠️ 没有解析到有效数据'); return; }
+
                 const dateGroups = {};
-                records.forEach(r => {
-                    if (!dateGroups[r.draw_date]) dateGroups[r.draw_date] = [];
-                    dateGroups[r.draw_date].push(r.resource_id);
-                });
-                
+                records.forEach(r => { (dateGroups[r.draw_date] = dateGroups[r.draw_date] || []).push(r.resource_id); });
                 let previewMsg = '📋 将导入以下数据：\n\n';
-                Object.keys(dateGroups).sort().forEach(date => {
-                    previewMsg += `📅 ${date}：${dateGroups[date].length} 个点位\n`;
-                });
+                Object.keys(dateGroups).sort().forEach(d => { previewMsg += `📅 ${d}：${dateGroups[d].length} 个点位\n`; });
                 previewMsg += `\n共计 ${records.length} 条记录`;
-                
-                if (!confirm(previewMsg + '\n\n确认导入？（会先清空本周数据）')) {
-                    fileInput.remove();
-                    return;
-                }
-                
-                // 先清空本周
-                await fetch('/api/reset/' + weekKey, { method: 'DELETE' });
-                
-                // 批量导入
-                let successCount = 0;
+
+                if (!confirm(previewMsg + '\n\n确认导入？（会先清空本轮数据）')) { fileInput.remove(); return; }
+
+                await apiDelete('/api/reset/' + weekKey);
+                let ok = 0;
                 for (const record of records) {
                     try {
-                        const resp = await fetch('/api/import-draw-record', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify(record)
-                        });
-                        if (resp.ok) successCount++;
-                    } catch (e) {
-                        console.warn('导入失败:', record, e);
-                    }
+                        const r = await apiPost('/api/import-draw-record', record);
+                        if (r.success) ok++;
+                    } catch (e) {}
                 }
-                
-                alert('✅ 成功导入 ' + successCount + ' 条记录！');
+                alert('✅ 成功导入 ' + ok + ' 条记录！');
                 await loadData();
-                
             } catch (e) {
                 alert('❌ 导入失败：' + e.message);
-                console.error(e);
             }
             fileInput.remove();
         });
-        
         fileInput.click();
     }
 
-    // 绑定导入按钮事件
-    importWeekBtn.addEventListener('click', doImportWeek);
-
-    // ===== 参与用户管理 =====
+    // ===== 参与用户 =====
     async function loadParticipants() {
         try {
-            const resp = await fetch(API_BASE + '/api/week-participants', { credentials: 'include' });
-            const data = await resp.json();
-            
+            const data = await apiGet('/api/week-participants?weekKey=' + weekKey);
             document.getElementById('participantWeekKey').textContent = data.weekKey;
-            
             const container = document.getElementById('participantList');
             container.innerHTML = '';
-            
             let selectedCount = 0;
-            
             data.participants.forEach(p => {
                 const isChecked = p.isParticipating !== false;
                 if (isChecked) selectedCount++;
-                
                 const div = document.createElement('div');
                 div.className = 'participant-item ' + (isChecked ? 'active' : 'inactive');
-                div.innerHTML = `
-                    <input type="checkbox" class="participant-checkbox" 
-                           data-username="${p.username}" 
-                           ${isChecked ? 'checked' : ''}>
-                    <label>${p.username}</label>
-                `;
-                
+                div.innerHTML = `<input type="checkbox" class="participant-checkbox" data-username="${p.username}" ${isChecked ? 'checked' : ''}><label>${p.username}</label>`;
                 div.addEventListener('click', function(e) {
                     if (e.target.tagName !== 'INPUT') {
                         const cb = this.querySelector('.participant-checkbox');
@@ -910,151 +1102,91 @@
                         cb.dispatchEvent(new Event('change'));
                     }
                 });
-                
                 container.appendChild(div);
             });
-            
             document.getElementById('selectedCount').textContent = selectedCount;
-            
             document.querySelectorAll('.participant-checkbox').forEach(cb => {
                 cb.addEventListener('change', function() {
-                    const container = this.closest('.participant-item');
-                    if (this.checked) {
-                        container.className = 'participant-item active';
-                    } else {
-                        container.className = 'participant-item inactive';
-                    }
+                    this.closest('.participant-item').className = 'participant-item ' + (this.checked ? 'active' : 'inactive');
                     updateSelectedCount();
                 });
             });
-            
         } catch (e) {
-            console.error('加载参与用户失败:', e);
-            document.getElementById('participantList').innerHTML = 
-                '<div style="width:100%;text-align:center;padding:20px;color:#c73b3b;">❌ 加载失败</div>';
-        }
-    }
-    
-    function updateSelectedCount() {
-        const checked = document.querySelectorAll('.participant-checkbox:checked').length;
-        document.getElementById('selectedCount').textContent = checked;
-    }
-    
-    async function saveParticipants() {
-        const checkboxes = document.querySelectorAll('.participant-checkbox');
-        const participants = [];
-        checkboxes.forEach(cb => {
-            participants.push({
-                username: cb.dataset.username,
-                isParticipating: cb.checked
-            });
-        });
-        
-        try {
-            const resp = await fetch(API_BASE + '/api/week-participants', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ participants })
-            });
-            const result = await resp.json();
-            if (result.success) {
-                const count = participants.filter(p => p.isParticipating).length;
-                alert('✅ 已保存！' + count + ' 人参与本周测评');
-                document.getElementById('selectedCount').textContent = count;
-            } else {
-                alert('❌ 保存失败：' + (result.message || '未知错误'));
-            }
-        } catch (e) {
-            alert('❌ 保存失败：' + e.message);
+            document.getElementById('participantList').innerHTML = '<div style="width:100%;text-align:center;padding:20px;color:#c73b3b;">❌ 加载失败</div>';
         }
     }
 
-    // ===== 导出功能 =====
+    function updateSelectedCount() {
+        document.getElementById('selectedCount').textContent = document.querySelectorAll('.participant-checkbox:checked').length;
+    }
+
+    async function saveParticipants() {
+        const participants = [];
+        document.querySelectorAll('.participant-checkbox').forEach(cb => {
+            participants.push({ username: cb.dataset.username, isParticipating: cb.checked });
+        });
+        const result = await apiPost('/api/week-participants', { participants, weekKey });
+        if (result.success) {
+            const count = participants.filter(p => p.isParticipating).length;
+            alert('✅ 已保存！' + count + ' 人参与本轮测评');
+            document.getElementById('selectedCount').textContent = count;
+        } else {
+            alert('❌ 保存失败：' + (result.message || '未知错误'));
+        }
+    }
+
+    // ===== 导出 =====
     async function exportAssessments(params, filename) {
         try {
             const url = new URL(API_BASE + '/api/admin/export-assessments');
-            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+            Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
             const resp = await fetch(url, { credentials: 'include' });
             if (!resp.ok) throw new Error('导出失败');
             const data = await resp.json();
             if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
-            
-            const headers = ['序号', '类型', '测评点位', '区域', '分配人', '测评人', '测评日期',
-                '班次', '摄像头位置', '路口方向', '开始时间', '结束时间',
-                '非机动车行人数', '逆行', '闯红灯', '越线停车', '行人不走斑马线', '其他',
-                '合计', '非机动车行人遵章率',
-                '右转弯机动车数量', '未礼让数量', '礼让率',
-                '路口违法车辆数',
-                '非机动车通过总数', '走错车道数', '遵章率(非机动车)',
-                '机动车乱停乱放数', '行人乱穿马路数',
-                '斑马线过车总数', '未礼让数(斑马线)', '遵章率(斑马线)',
-                '备注'
-            ];
-            
+
+            const headers = ['序号','类型','测评点位','区域','分配人','测评人','测评日期','班次','摄像头位置','路口方向','开始时间','结束时间','非机动车行人数','逆行','闯红灯','越线停车','行人不走斑马线','其他','合计','非机动车行人遵章率','右转弯机动车数量','未让行数量','礼让率','路口违法车辆数','非机动车通过总数','走错车道数','遵章率(非机动车)','机动车乱停乱放数','行人乱穿马路数','斑马线过车总数','未礼让数(斑马线)','遵章率(斑马线)','备注'];
             const rows = data.map((row, idx) => {
                 const typeLabel = row.type === 'road' ? '路段' : '路口';
-                return [
-                    idx + 1, typeLabel, row.name || '', row.area || '', row.responsible || '',
-                    row.evaluator || '', row.assessment_date || '',
-                    row.paixu || '', row.camera || '', row.direction || '',
-                    row.time_start || '', row.time_end || '',
-                    row.non_motor_count || '', row.reverse_count || '', row.red_light_count || '',
-                    row.stop_line_count || '', row.no_crosswalk_count || '', row.other_count || '',
-                    row.total || '', row.compliance_rate || '',
-                    row.right_turn_count || '', row.no_yield_count || '', row.yield_rate || '',
-                    row.illegal_count || '',
-                    row.non_motor_total || '', row.wrong_lane_count || '', row.compliance_rate_non || '',
-                    row.parking_violation || '', row.jaywalk_count || '',
-                    row.crosswalk_total || '', row.no_yield_cross || '', row.compliance_rate_cross || '',
-                    row.remark || ''
-                ];
+                return [idx + 1, typeLabel, row.name || '', row.area || '', row.responsible || '', row.evaluator || '', row.assessment_date || '', row.paixu || '', row.camera || '', row.direction || '', row.time_start || '', row.time_end || '', row.non_motor_count || '', row.reverse_count || '', row.red_light_count || '', row.stop_line_count || '', row.no_crosswalk_count || '', row.other_count || '', row.total || '', row.compliance_rate || '', row.right_turn_count || '', row.no_yield_count || '', row.yield_rate || '', row.illegal_count || '', row.non_motor_total || '', row.wrong_lane_count || '', row.compliance_rate_non || '', row.parking_violation || '', row.jaywalk_count || '', row.crosswalk_total || '', row.no_yield_cross || '', row.compliance_rate_cross || '', row.remark || ''];
             });
-            
-            const wsData = [headers].concat(rows);
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
             ws['!cols'] = headers.map(() => ({ wch: 14 }));
-            
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, '测评数据');
             const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
             const blob = new Blob([wbout], { type: 'application/octet-stream' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = filename || '测评数据_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+            link.download = filename || ('测评数据_' + new Date().toISOString().slice(0, 10) + '.xlsx');
             link.click();
             URL.revokeObjectURL(link.href);
-        } catch (e) { 
-            alert('❌ 导出失败：' + e.message);
-            console.error(e);
-        }
+        } catch (e) { alert('❌ 导出失败：' + e.message); }
     }
 
     async function exportDrawRecords(params, filename) {
         try {
             const url = new URL(API_BASE + '/api/admin/export-draw-records');
-            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+            Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
             const resp = await fetch(url, { credentials: 'include' });
             if (!resp.ok) throw new Error('导出失败');
             const data = await resp.json();
             if (data.length === 0) { alert('📭 暂无数据可导出'); return; }
-            
-            const headers = ['序号', '日期', '周几', '编号', '名称', '类型', '区域', '分配人'];
-            const dayMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+            const headers = ['序号','日期','周几','编号','名称','类型','区域','分配人'];
             const rows = data.map((row, idx) => {
                 const d = new Date(row.draw_date + 'T00:00:00');
-                const day = dayMap[d.getDay()];
-                return [idx + 1, row.draw_date, day, row.id, row.name, row.type_label, row.area || '', row.assigned_to || ''];
+                const day = ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
+                return [idx + 1, row.draw_date, day, row.resource_id || row.id, row.name, row.type_label, row.area || '', row.assigned_to || ''];
             });
-            const wsData = [headers].concat(rows);
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, '抽取记录');
             const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
             const blob = new Blob([wbout], { type: 'application/octet-stream' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = filename || '抽取记录_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+            link.download = filename || ('抽取记录_' + new Date().toISOString().slice(0, 10) + '.xlsx');
             link.click();
             URL.revokeObjectURL(link.href);
         } catch (e) { alert('❌ 导出失败：' + e.message); }
@@ -1063,17 +1195,17 @@
     // ===== 用户管理 =====
     async function loadUsers() {
         try {
-            const resp = await fetch(API_BASE + '/api/users');
-            if (!resp.ok) return;
-            const users = await resp.json();
-            userList.innerHTML = users.map(function(u) {
-                return '<div class="user-item">' + u.username + (u.role === 'admin' ? ' ⭐' : '') + (u.role !== 'admin' ? '<button class="del-btn" data-id="' + u.id + '">✕</button>' : '') + '</div>';
-            }).join('');
-            document.querySelectorAll('.del-btn').forEach(function(btn) {
+            const users = await apiGet('/api/users');
+            if (!users) return;
+            userList.innerHTML = users.map(u =>
+                '<div class="user-item">' + u.username + (u.role === 'admin' ? ' ⭐' : '') +
+                (u.role !== 'admin' ? '<button class="del-btn" data-id="' + u.id + '">✕</button>' : '') + '</div>'
+            ).join('');
+            document.querySelectorAll('.del-btn').forEach(btn => {
                 btn.addEventListener('click', async function() {
-                    const id = this.dataset.id;
                     if (!confirm('确认删除该用户？')) return;
-                    try { await fetch(API_BASE + '/api/users/' + id, { method: 'DELETE' }); loadUsers(); } catch (e) { alert('删除失败'); }
+                    await apiDelete('/api/users/' + this.dataset.id);
+                    loadUsers();
                 });
             });
         } catch (e) {}
@@ -1083,49 +1215,32 @@
         const username = newUsername.value.trim();
         const password = newPassword.value.trim();
         if (!username || !password) { alert('请输入用户名和密码'); return; }
-        try {
-            const resp = await fetch(API_BASE + '/api/users', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ username, password })
-            });
-            const data = await resp.json();
-            if (data.success) { alert('✅ 用户添加成功！'); newUsername.value = ''; newPassword.value = ''; loadUsers(); }
-            else { alert(data.error || '添加失败'); }
-        } catch (e) { alert('添加失败'); }
+        const data = await apiPost('/api/users', { username, password });
+        if (data.success) { alert('✅ 用户添加成功！'); newUsername.value = ''; newPassword.value = ''; loadUsers(); }
+        else alert(data.error || '添加失败');
     }
 
     async function doBatchAddUsers() {
         const text = batchUsers.value.trim();
         if (!text) { alert('请先输入用户数据'); return; }
-        const lines = text.split('\n').filter(line => line.trim());
-        const users = lines.map(line => { const parts = line.split(',').map(s => s.trim()); return { username: parts[0], password: parts[1] || '123456' }; }).filter(u => u.username);
+        const users = text.split('\n').filter(l => l.trim()).map(line => {
+            const parts = line.split(',').map(s => s.trim());
+            return { username: parts[0], password: parts[1] || '123456' };
+        }).filter(u => u.username);
         if (users.length === 0) { alert('没有有效的用户数据'); return; }
         if (!confirm('确认批量添加 ' + users.length + ' 个用户？')) return;
-        try {
-            const resp = await fetch(API_BASE + '/api/users/batch', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ users })
-            });
-            const data = await resp.json();
-            alert('✅ 成功添加 ' + data.added + ' 个用户，失败 ' + data.failed + ' 个');
-            batchUsers.value = '';
-            loadUsers();
-        } catch (e) { alert('批量添加失败'); }
+        const data = await apiPost('/api/users/batch', { users });
+        alert('✅ 成功添加 ' + data.added + ' 个用户，失败 ' + data.failed + ' 个');
+        batchUsers.value = '';
+        loadUsers();
     }
 
     // ===== 资源管理 =====
     async function loadResourcesInfo() {
         try {
-            const planResp = await fetch(API_BASE + '/api/active-plan', { credentials: 'include' });
-            const planData = await planResp.json();
+            const planData = await apiGet('/api/active-plan');
             const planKey = planData ? planData.plan_key : 'plan_a';
-            
-            const resp = await fetch(API_BASE + '/api/resources?planKey=' + planKey, { credentials: 'include' });
-            const data = await resp.json();
+            const data = await apiGet('/api/resources?planKey=' + planKey);
             resourceCount.textContent = data.length;
             resRoadCount.textContent = data.filter(r => r.type === 'road').length;
             resCrossCount.textContent = data.filter(r => r.type === 'cross').length;
@@ -1136,17 +1251,13 @@
     async function loadResourceList() {
         resourceListBody.innerHTML = '<tr><td colspan="4" class="empty-state">⏳ 加载中...</td></tr>';
         try {
-            const planResp = await fetch(API_BASE + '/api/active-plan', { credentials: 'include' });
-            const planData = await planResp.json();
+            const planData = await apiGet('/api/active-plan');
             const planKey = planData ? planData.plan_key : 'plan_a';
-            
-            const resp = await fetch(API_BASE + '/api/resources?planKey=' + planKey, { credentials: 'include' });
-            if (!resp.ok) throw new Error('加载失败');
-            const data = await resp.json();
-            if (data.length === 0) { resourceListBody.innerHTML = '<tr><td colspan="4" class="empty-state">📭 暂无资源数据</td></tr>'; return; }
-            resourceListBody.innerHTML = data.map(function(r) {
-                var badgeClass = r.type === 'road' ? 'badge-road' : 'badge-cross';
-                var typeLabel = r.type === 'road' ? '路段' : '路口';
+            const data = await apiGet('/api/resources?planKey=' + planKey);
+            if (!data.length) { resourceListBody.innerHTML = '<tr><td colspan="4" class="empty-state">📭 暂无资源数据</td></tr>'; return; }
+            resourceListBody.innerHTML = data.map(r => {
+                const badgeClass = r.type === 'road' ? 'badge-road' : 'badge-cross';
+                const typeLabel = r.type === 'road' ? '路段' : '路口';
                 return '<tr><td><strong>' + (r.id || '') + '</strong></td><td>' + (r.name || '') + '</td><td><span class="badge ' + badgeClass + '">' + typeLabel + '</span></td><td>' + (r.area || '') + '</td></tr>';
             }).join('');
         } catch (e) {
@@ -1157,34 +1268,30 @@
     // ===== 日志 =====
     async function loadLogs() {
         try {
-            const resp = await fetch(API_BASE + '/api/logs');
-            if (!resp.ok) return;
-            const logs = await resp.json();
-            if (logs.length === 0) { logList.innerHTML = '<div class="empty-state">暂无操作日志</div>'; return; }
-            logList.innerHTML = logs.map(function(log) {
-                return '<div class="log-item"><span class="log-time">' + log.created_at.replace('T', ' ').slice(0, 19) + '</span><span class="log-user">' + log.username + '</span><span class="log-action">' + log.action + '</span><span class="log-details">' + (log.details || '') + '</span></div>';
-            }).join('');
+            const logs = await apiGet('/api/logs');
+            if (!logs.length) { logList.innerHTML = '<div class="empty-state">暂无操作日志</div>'; return; }
+            logList.innerHTML = logs.map(log =>
+                '<div class="log-item"><span class="log-time">' + log.created_at.replace('T', ' ').slice(0, 19) + '</span><span class="log-user">' + log.username + '</span><span class="log-action">' + log.action + '</span><span class="log-details">' + (log.details || '') + '</span></div>'
+            ).join('');
         } catch (e) { logList.innerHTML = '<div class="empty-state">加载日志失败</div>'; }
     }
 
     // ===== 汇总 =====
     async function loadSummary(startDate, endDate) {
         summaryBody.innerHTML = '<tr><td colspan="9" class="empty-state">⏳ 加载中...</td></tr>';
-        var url = API_BASE + '/api/admin/all-assessments';
-        var params = new URLSearchParams();
+        let url = '/api/admin/all-assessments';
+        const params = new URLSearchParams();
         if (startDate) params.append('startDate', startDate);
         if (endDate) params.append('endDate', endDate);
         if (params.toString()) url += '?' + params.toString();
         try {
-            var resp = await fetch(url, { credentials: 'include' });
-            if (!resp.ok) throw new Error('加载失败');
-            var data = await resp.json();
+            const data = await apiGet(url);
             summaryCount.textContent = '共 ' + data.length + ' 条记录';
             if (data.length === 0) { summaryBody.innerHTML = '<tr><td colspan="9" class="empty-state">📭 暂无测评数据</td></tr>'; return; }
-            summaryBody.innerHTML = data.map(function(row, idx) {
-                var typeLabel = row.type === 'road' ? '路段' : '路口';
-                var badgeClass = row.type === 'road' ? 'badge-road' : 'badge-cross';
-                var compliance = row.compliance_rate || row.compliance_rate_non || row.compliance_rate_cross || '';
+            summaryBody.innerHTML = data.map((row, idx) => {
+                const typeLabel = row.type === 'road' ? '路段' : '路口';
+                const badgeClass = row.type === 'road' ? 'badge-road' : 'badge-cross';
+                const compliance = row.compliance_rate || row.compliance_rate_non || row.compliance_rate_cross || '';
                 return '<tr><td>' + (idx + 1) + '</td><td><span class="badge ' + badgeClass + '">' + typeLabel + '</span></td><td><strong>' + (row.name || '') + '</strong></td><td>' + (row.area || '') + '</td><td>' + (row.responsible || '') + '</td><td>' + (row.evaluator || '') + '</td><td>' + (row.assessment_date || '') + '</td><td>' + compliance + '</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (row.remark || '') + '</td></tr>';
             }).join('');
         } catch (e) {
@@ -1194,36 +1301,40 @@
 
     // ===== 测评按钮 =====
     assessmentBtn.addEventListener('click', function() {
-        var username = currentUser ? currentUser.username : 'admin';
+        const username = currentUser ? currentUser.username : 'admin';
         window.open('/assessment.html?user=' + encodeURIComponent(username), '_blank');
     });
 
     // ===== 事件绑定 =====
     loginBtn.addEventListener('click', doLogin);
-    loginUsername.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
-    loginPassword.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+    loginUsername.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    loginPassword.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
     logoutBtn.addEventListener('click', doLogout);
     drawWeekBtn.addEventListener('click', doDrawWeek);
     resetBtn.addEventListener('click', doReset);
     exportBtn.addEventListener('click', doExport);
+    importWeekBtn.addEventListener('click', doImportWeek);
+
     adminToggleBtn.addEventListener('click', function() {
         adminPanel.classList.toggle('hidden');
-        if (!adminPanel.classList.contains('hidden')) { 
-            loadUsers(); 
-            loadResourcesInfo(); 
+        if (!adminPanel.classList.contains('hidden')) {
+            initFlatpickr();
+            loadUsers();
+            loadResourcesInfo();
             loadResourceList();
             loadPlans();
             loadParticipants();
+            loadRounds();
+            loadCustomPlans();
         }
     });
-    closeAdminPanel.addEventListener('click', function() { adminPanel.classList.add('hidden'); });
+    closeAdminPanel.addEventListener('click', () => adminPanel.classList.add('hidden'));
     addUserBtn.addEventListener('click', doAddUser);
     batchAddBtn.addEventListener('click', doBatchAddUsers);
     refreshLogsBtn.addEventListener('click', loadLogs);
-    refreshResourcesBtn.addEventListener('click', function() { loadResourceList(); loadResourcesInfo(); });
-    summaryFilterBtn.addEventListener('click', function() { loadSummary(summaryStartDate.value, summaryEndDate.value); });
+    refreshResourcesBtn.addEventListener('click', () => { loadResourceList(); loadResourcesInfo(); });
+    summaryFilterBtn.addEventListener('click', () => loadSummary(summaryStartDate.value, summaryEndDate.value));
 
-    // 方案切换事件
     activatePlanBtn.addEventListener('click', activatePlan);
     document.querySelectorAll('.plan-option').forEach(el => {
         el.addEventListener('click', function() {
@@ -1234,50 +1345,64 @@
         });
     });
 
-    // 参与用户事件
+    // 轮次
+    saveRoundBtn.addEventListener('click', saveRound);
+    clearRoundDates.addEventListener('click', function() {
+        selectedRoundDates = [];
+        if (flatpickrInstance) flatpickrInstance.clear();
+        renderRoundDateTags();
+    });
+
+    // 自定义方案
+    loadCustomResourcesBtn.addEventListener('click', loadCustomResources);
+    selectAllCustomBtn.addEventListener('click', function() {
+        customResourceGrid.querySelectorAll('.custom-res-item').forEach(it => {
+            it.classList.add('checked');
+            it.querySelector('input').checked = true;
+        });
+    });
+    selectNoneCustomBtn.addEventListener('click', function() {
+        customResourceGrid.querySelectorAll('.custom-res-item').forEach(it => {
+            it.classList.remove('checked');
+            it.querySelector('input').checked = false;
+        });
+    });
+    saveCustomPlanBtn.addEventListener('click', saveCustomPlan);
+
+    // 参与用户
     document.getElementById('selectAllParticipants')?.addEventListener('click', function() {
-        document.querySelectorAll('.participant-checkbox').forEach(cb => {
-            cb.checked = true;
-            cb.dispatchEvent(new Event('change'));
-        });
+        document.querySelectorAll('.participant-checkbox').forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
         updateSelectedCount();
     });
-    
     document.getElementById('selectNoneParticipants')?.addEventListener('click', function() {
-        document.querySelectorAll('.participant-checkbox').forEach(cb => {
-            cb.checked = false;
-            cb.dispatchEvent(new Event('change'));
-        });
+        document.querySelectorAll('.participant-checkbox').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
         updateSelectedCount();
     });
-    
     document.getElementById('saveParticipantsBtn')?.addEventListener('click', saveParticipants);
 
-    // 导出事件
-    exportAllAssessments.addEventListener('click', function() {
-        exportAssessments({}, '全部测评数据.xlsx');
-    });
-
-    exportTodayAssessments.addEventListener('click', function() {
+    // 导出
+    exportAllAssessments.addEventListener('click', () => exportAssessments({}, '全部测评数据.xlsx'));
+    exportTodayAssessments.addEventListener('click', () => {
         const today = new Date().toISOString().slice(0, 10);
         exportAssessments({ startDate: today, endDate: today }, '今日测评数据_' + today + '.xlsx');
     });
-
-    exportDateAssessments.addEventListener('click', function() {
+    exportDateAssessments.addEventListener('click', () => {
         const date = exportSingleDate.value;
         if (!date) { alert('请先选择日期'); return; }
         exportAssessments({ startDate: date, endDate: date }, '测评数据_' + date + '.xlsx');
     });
-
-    exportAllDrawRecords.addEventListener('click', function() {
-        const week = getWeekKey();
-        exportDrawRecords({ weekKey: week }, '本周抽取记录_' + week + '.xlsx');
+    exportAllDrawRecords.addEventListener('click', () => {
+        exportDrawRecords({ weekKey }, '本轮抽取记录_' + weekKey + '.xlsx');
     });
-
-    exportDateDrawRecords.addEventListener('click', function() {
+    exportDateDrawRecords.addEventListener('click', () => {
         const date = exportDrawDate.value;
         if (!date) { alert('请先选择日期'); return; }
         exportDrawRecords({ drawDate: date }, '抽取记录_' + date + '.xlsx');
+    });
+    exportWithImagesBtn.addEventListener('click', () => {
+        const date = exportWithImagesDate.value;
+        if (!date) { alert('请先选择日期'); return; }
+        window.location.href = API_BASE + '/api/admin/export-with-images?date=' + encodeURIComponent(date);
     });
 
     // ===== 启动 =====
