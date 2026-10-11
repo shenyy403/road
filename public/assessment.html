@@ -31,28 +31,31 @@
         td .auto-filled input { background: #eafaf0; color: #1a6b3a; }
         td .image-required { background: #fff3cd; }
         td .image-required input { background: #fff3cd; }
-        td .image-upload-cell { min-width: 120px; }
-        td .image-upload-cell .upload-btn { 
-            padding: 4px 10px; 
-            background: #1d6f9c; 
-            color: white; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer; 
+        td .image-upload-cell { min-width: 130px; }
+        td .image-upload-cell .upload-btn {
+            padding: 4px 10px;
+            background: #1d6f9c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
             font-size: 11px;
         }
         td .image-upload-cell .upload-btn:hover { background: #155a80; }
         td .image-upload-cell .file-input { display: none; }
-        td .image-upload-cell .image-preview { max-width: 80px; max-height: 60px; display: block; margin: 2px auto; border-radius: 4px; }
-        td .image-upload-cell .remove-image { 
-            color: #c73b3b; 
-            cursor: pointer; 
-            font-size: 11px; 
+        td .image-upload-cell .image-preview { max-width: 70px; max-height: 50px; display: inline-block; margin: 2px; border-radius: 4px; vertical-align: middle; }
+        td .image-upload-cell .remove-image {
+            color: #c73b3b;
+            cursor: pointer;
+            font-size: 11px;
             display: inline-block;
-            margin-top: 2px;
+            margin-left: 2px;
+            vertical-align: middle;
         }
         td .image-upload-cell .remove-image:hover { text-decoration: underline; }
         td .image-upload-cell .upload-status { font-size: 11px; color: #1f8b4c; display: block; }
+        td .image-upload-cell .preview-list { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 4px; }
+        td .image-upload-cell .thumb-wrap { position: relative; }
         .time-group { display: flex; align-items: center; gap: 4px; justify-content: center; }
         .time-group input { width: 68px; min-width: 50px; }
         .time-group span { font-size: 11px; color: #888; }
@@ -86,13 +89,13 @@
         .sync-status.synced { background: #d4edda; color: #155724; }
         .sync-status.syncing { background: #fff3cd; color: #856404; }
         .sync-status.error { background: #f8d7da; color: #721c24; }
-        .image-required-badge { 
-            display: inline-block; 
-            background: #dc3545; 
-            color: white; 
-            font-size: 10px; 
-            padding: 1px 8px; 
-            border-radius: 10px; 
+        .image-required-badge {
+            display: inline-block;
+            background: #dc3545;
+            color: white;
+            font-size: 10px;
+            padding: 1px 8px;
+            border-radius: 10px;
             margin-left: 4px;
         }
         @media (max-width: 768px) { .container { padding: 14px; } .formula-grid { grid-template-columns: 1fr; } table { font-size: 11px; min-width: 1000px; } th, td { padding: 4px 3px; } td input { font-size: 11px; min-width: 36px; } .time-group input { width: 50px; min-width: 40px; } }
@@ -141,7 +144,7 @@
                         <th style="min-width:85px;">路口违法<br>车辆数</th>
                         <th style="min-width:60px;">测评人</th>
                         <th style="min-width:70px;">备注</th>
-                        <th style="min-width:120px;">📎 图片</th>
+                        <th style="min-width:130px;">📎 图片</th>
                     </tr>
                 </thead>
                 <tbody id="crossBody"></tbody>
@@ -149,7 +152,7 @@
         </div>
     </div>
 
-    <!-- 路段部分（简化版） -->
+    <!-- 路段部分 -->
     <div class="section">
         <div class="section-title">
             🛣️ 路段部分
@@ -169,7 +172,7 @@
                         <th style="min-width:65px;">礼让率</th>
                         <th style="min-width:60px;">测评人</th>
                         <th style="min-width:70px;">备注</th>
-                        <th style="min-width:120px;">📎 图片</th>
+                        <th style="min-width:130px;">📎 图片</th>
                     </tr>
                 </thead>
                 <tbody id="roadBody"></tbody>
@@ -197,8 +200,9 @@
             <div class="formula-item"><div class="label">④ 礼让率</div><div class="expr">礼让率 = (右转弯机动车数量 − 未礼让数量) / 右转弯机动车数量 × 100%</div></div>
             <div style="grid-column:1/-1;font-weight:600;color:#dc3545;font-size:13px;border-top:2px solid #dc3545;padding-top:8px;margin-top:4px;">
                 ⚠️ 强制上传图片规则：<br>
-                • 路口：非机动车行人遵章率 &lt; 90% 或 礼让率 &lt; 95% 时必须上传图片<br>
-                • 路段：礼让率 &lt; 95% 时必须上传图片
+                • 路口：非机动车行人遵章率 &lt; 98% 或 礼让率 &lt; 98% 时必须上传图片<br>
+                • 路段：礼让率 &lt; 98% 时必须上传图片<br>
+                • 可上传一张或多张图片
             </div>
         </div>
     </div>
@@ -219,6 +223,9 @@
     const urlUser = urlParams.get('user');
     if (urlUser) { currentUser = urlUser; localStorage.setItem('assessment_user', currentUser); }
     else { const savedUser = localStorage.getItem('assessment_user'); if (savedUser) currentUser = savedUser; }
+
+    const urlDate = urlParams.get('date');
+    if (urlDate) currentDate = urlDate;
 
     const crossBody = document.getElementById('crossBody');
     const roadBody = document.getElementById('roadBody');
@@ -243,153 +250,178 @@
         syncStatus.innerHTML = `<span class="sync-status ${type}">${msg || classes[type] || ''}</span>`;
     }
 
-    // ===== 图片上传函数 =====
-    async function uploadImage(file) {
+    // ===== 图片上传（带 meta，供后端命名） =====
+    async function uploadImage(file, meta) {
         const formData = new FormData();
+        // 文本字段必须在 file 之前 append，multer 才能解析到 req.body
+        formData.append('resourceName', meta.resourceName || '');
+        formData.append('date', meta.date || currentDate);
+        formData.append('dataType', meta.dataType || '');
         formData.append('image', file);
-        
-        try {
-            const resp = await fetch(API_BASE + '/api/upload-image', {
-                method: 'POST',
-                credentials: 'include',
-                body: formData
-            });
-            const result = await resp.json();
-            if (result.success) {
-                return result.url;
-            } else {
-                throw new Error(result.error || '上传失败');
-            }
-        } catch (e) {
-            throw new Error('上传失败: ' + e.message);
-        }
+
+        const resp = await fetch(API_BASE + '/api/upload-image', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+        });
+        const result = await resp.json();
+        if (result.success) return result.url;
+        throw new Error(result.error || '上传失败');
     }
 
-    // ===== 创建图片上传控件 =====
+    // ===== 计算该行需要上传图片时的类型标签 =====
+    function getRequiredImageType(row, type) {
+        // 返回要传给后端的 dataType 文案，用于文件命名
+        if (type === 'cross') {
+            const c = parseFloat(row.compliance_rate) || 0;
+            const y = parseFloat(row.yield_rate) || 0;
+            const lowC = c > 0 && c < 98;
+            const lowY = y > 0 && y < 98;
+            if (lowC && lowY) return '遵章率礼让率';
+            if (lowC) return '遵章率';
+            if (lowY) return '礼让率';
+        } else {
+            const y = parseFloat(row.yield_rate) || 0;
+            if (y > 0 && y < 98) return '礼让率';
+        }
+        return '';
+    }
+
+    // ===== 创建图片上传控件（支持多图） =====
     function createImageUploadCell(rowData, type) {
         const div = document.createElement('div');
         div.className = 'image-upload-cell';
         div.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;';
-        
-        // 隐藏的文件输入
+
+        // 初始化 imageUrls 数组
+        if (!Array.isArray(rowData.imageUrls)) {
+            if (rowData.imageUrl) {
+                rowData.imageUrls = Array.isArray(rowData.imageUrl) ? rowData.imageUrl.slice() : [rowData.imageUrl];
+            } else {
+                rowData.imageUrls = [];
+            }
+        }
+
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = 'image/*';
+        fileInput.multiple = true;
         fileInput.className = 'file-input';
         fileInput.style.display = 'none';
-        
-        // 上传按钮
+
         const uploadBtn = document.createElement('button');
         uploadBtn.className = 'upload-btn';
         uploadBtn.textContent = '📤 上传图片';
         uploadBtn.type = 'button';
-        
-        // 图片预览
-        const preview = document.createElement('img');
-        preview.className = 'image-preview';
-        preview.style.display = 'none';
-        if (rowData.imageUrl) {
-            preview.src = rowData.imageUrl;
-            preview.style.display = 'block';
-        }
-        
-        // 状态文字
+
+        const previewList = document.createElement('div');
+        previewList.className = 'preview-list';
+
         const status = document.createElement('span');
         status.className = 'upload-status';
-        if (rowData.imageUrl) {
-            status.textContent = '✅ 已上传';
-            status.style.color = '#1f8b4c';
+
+        function renderPreviews() {
+            previewList.innerHTML = '';
+            rowData.imageUrls.forEach((url, idx) => {
+                const wrap = document.createElement('span');
+                wrap.className = 'thumb-wrap';
+                const img = document.createElement('img');
+                img.className = 'image-preview';
+                img.src = url;
+                img.title = '点击查看大图';
+                img.style.cursor = 'pointer';
+                img.addEventListener('click', () => window.open(url, '_blank'));
+                const rm = document.createElement('span');
+                rm.className = 'remove-image';
+                rm.textContent = '✕';
+                rm.title = '删除这张';
+                rm.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    rowData.imageUrls.splice(idx, 1);
+                    renderPreviews();
+                    checkImageRequired(rowData, type);
+                });
+                wrap.appendChild(img);
+                wrap.appendChild(rm);
+                previewList.appendChild(wrap);
+            });
+            if (rowData.imageUrls.length > 0) {
+                status.textContent = `✅ 已上传 ${rowData.imageUrls.length} 张`;
+                status.style.color = '#1f8b4c';
+                uploadBtn.textContent = '📤 继续添加';
+            } else {
+                status.textContent = '';
+                uploadBtn.textContent = '📤 上传图片';
+            }
         }
-        
-        // 删除按钮
-        const removeBtn = document.createElement('span');
-        removeBtn.className = 'remove-image';
-        removeBtn.textContent = '✕ 删除';
-        if (!rowData.imageUrl) {
-            removeBtn.style.display = 'none';
-        }
-        
-        // 文件选择事件
+
         fileInput.addEventListener('change', async function(e) {
-            const file = this.files[0];
-            if (!file) return;
-            
+            const files = Array.from(this.files || []);
+            if (files.length === 0) return;
+
             uploadBtn.disabled = true;
-            uploadBtn.textContent = '⏳ 上传中...';
             status.textContent = '⏳ 上传中...';
             status.style.color = '#856404';
-            
-            try {
-                const url = await uploadImage(file);
-                rowData.imageUrl = url;
-                preview.src = url;
-                preview.style.display = 'block';
-                status.textContent = '✅ 已上传';
-                status.style.color = '#1f8b4c';
-                removeBtn.style.display = 'inline-block';
-                uploadBtn.textContent = '📤 重新上传';
-                // 触发更新检查
-                checkImageRequired(rowData, type);
-            } catch (e) {
-                status.textContent = '❌ ' + e.message;
-                status.style.color = '#c73b3b';
+
+            const dataType = getRequiredImageType(rowData, type) || '礼让率';
+
+            for (const file of files) {
+                try {
+                    const url = await uploadImage(file, {
+                        resourceName: rowData.name || '',
+                        date: currentDate,
+                        dataType
+                    });
+                    rowData.imageUrls.push(url);
+                    renderPreviews();
+                } catch (err) {
+                    status.textContent = '❌ ' + err.message;
+                    status.style.color = '#c73b3b';
+                }
             }
-            
+
             uploadBtn.disabled = false;
             fileInput.value = '';
-        });
-        
-        // 删除图片
-        removeBtn.addEventListener('click', function() {
-            rowData.imageUrl = '';
-            preview.style.display = 'none';
-            preview.src = '';
-            status.textContent = '';
-            removeBtn.style.display = 'none';
-            uploadBtn.textContent = '📤 上传图片';
             checkImageRequired(rowData, type);
         });
-        
+
         uploadBtn.addEventListener('click', function() {
             fileInput.click();
         });
-        
+
         div.appendChild(fileInput);
-        div.appendChild(preview);
         div.appendChild(uploadBtn);
+        div.appendChild(previewList);
         div.appendChild(status);
-        div.appendChild(removeBtn);
-        
+
+        renderPreviews();
+
+        // 首次渲染后检查一次
+        setTimeout(() => checkImageRequired(rowData, type), 0);
+
         return div;
     }
 
-    // ===== 检查是否需要上传图片 =====
+    // ===== 判断是否需要上传图片（阈值 98%） =====
     function checkImageRequired(rowData, type) {
-        // 找到该行所在的tr
         const tr = document.querySelector(`tr[data-row-index="${rowData.rowIndex}"][data-type="${type}"]`);
         if (!tr) return;
-        
         const imageCell = tr.querySelector('.image-upload-cell');
         if (!imageCell) return;
-        
+
         let required = false;
-        
         if (type === 'cross') {
-            // 路口：非机动车遵章率 < 90% 或 礼让率 < 95%
             const compliance = parseFloat(rowData.compliance_rate) || 0;
             const yieldRate = parseFloat(rowData.yield_rate) || 0;
-            if (compliance > 0 && compliance < 90) required = true;
-            if (yieldRate > 0 && yieldRate < 95) required = true;
+            if (compliance > 0 && compliance < 98) required = true;
+            if (yieldRate > 0 && yieldRate < 98) required = true;
         } else if (type === 'road') {
-            // 路段：礼让率 < 95%
             const yieldRate = parseFloat(rowData.yield_rate) || 0;
-            if (yieldRate > 0 && yieldRate < 95) required = true;
+            if (yieldRate > 0 && yieldRate < 98) required = true;
         }
-        
-        // 标记行背景
+
         if (required) {
             tr.style.backgroundColor = '#fff3cd';
-            // 添加提示标记
             let badge = tr.querySelector('.image-required-badge');
             if (!badge) {
                 badge = document.createElement('span');
@@ -403,15 +435,15 @@
             const badge = tr.querySelector('.image-required-badge');
             if (badge) badge.remove();
         }
-        
-        // 更新状态文字
+
         const status = imageCell.querySelector('.upload-status');
+        const hasImage = Array.isArray(rowData.imageUrls) && rowData.imageUrls.length > 0;
         if (status) {
-            if (required && !rowData.imageUrl) {
+            if (required && !hasImage) {
                 status.textContent = '⚠️ 必须上传图片！';
                 status.style.color = '#dc3545';
-            } else if (rowData.imageUrl) {
-                status.textContent = '✅ 已上传';
+            } else if (hasImage) {
+                status.textContent = `✅ 已上传 ${rowData.imageUrls.length} 张`;
                 status.style.color = '#1f8b4c';
             } else {
                 status.textContent = '';
@@ -419,9 +451,13 @@
         }
     }
 
+    // ===== 数据获取 =====
     async function fetchTodayDraw() {
         try {
-            const resp = await fetch(`${API_BASE}/api/my-today-draw`, { credentials: 'include', headers: { 'Cache-Control': 'no-cache' } });
+            const resp = await fetch(`${API_BASE}/api/my-today-draw?date=${currentDate}`, {
+                credentials: 'include',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
             if (!resp.ok) throw new Error('获取抽取数据失败');
             const data = await resp.json();
             todayDrawData = data;
@@ -431,7 +467,10 @@
 
     async function fetchMyAssessments() {
         try {
-            const resp = await fetch(`${API_BASE}/api/my-assessments-today`, { credentials: 'include', headers: { 'Cache-Control': 'no-cache' } });
+            const resp = await fetch(`${API_BASE}/api/my-assessments-today?date=${currentDate}`, {
+                credentials: 'include',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
             if (!resp.ok) throw new Error('获取测评数据失败');
             const data = await resp.json();
             myAssessments = data || [];
@@ -446,7 +485,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ assessments })
+                body: JSON.stringify({ assessments, date: currentDate })
             });
             const result = await resp.json();
             if (result.success) {
@@ -454,7 +493,10 @@
                 saveStatus.textContent = `✅ ${new Date().toLocaleTimeString()} 提交成功`;
                 saveStatus.style.color = '#1f8b4c';
                 return result;
-            } else { throw new Error(result.message || '提交失败'); }
+            } else {
+                const msg = result.errors ? result.errors.join('\n') : (result.error || result.message || '提交失败');
+                throw new Error(msg);
+            }
         } catch (e) {
             setSyncStatus('error', `❌ ${e.message}`);
             saveStatus.textContent = `❌ ${e.message}`;
@@ -463,14 +505,7 @@
         }
     }
 
-    function createEmptyCrossRow(index, shift) {
-        return { type: 'cross', row_index: index, paixu: shift === '早班' ? '早' : '晚', name: '', camera: '', direction: '', time_start: '', time_end: '', non_motor_count: '', reverse_count: '', red_light_count: '', stop_line_count: '', no_crosswalk_count: '', other_count: '', total: '', compliance_rate: '', right_turn_count: '', no_yield_count: '', yield_rate: '', illegal_count: '', evaluator: '', remark: '', imageUrl: '', isAutoFilled: false, shift: shift };
-    }
-
-    function createEmptyRoadRow(index, shift) {
-        return { type: 'road', row_index: index, paixu: shift === '早班' ? '早' : '晚', name: '', device: '', time_start: '', time_end: '', right_turn_count: '', no_yield_count: '', yield_rate: '', evaluator: '', remark: '', imageUrl: '', isAutoFilled: false, shift: shift };
-    }
-
+    // ===== 计算 =====
     function calcCrossTotal(row) {
         return (parseFloat(row.reverse_count)||0) + (parseFloat(row.red_light_count)||0) + (parseFloat(row.stop_line_count)||0) + (parseFloat(row.no_crosswalk_count)||0) + (parseFloat(row.other_count)||0);
     }
@@ -487,33 +522,34 @@
         return rightTurn === 0 ? '' : ((rightTurn - noYield) / rightTurn * 100);
     }
 
-    // ===== renderCrossTable =====
+    // ===== 渲染路口表 =====
     function renderCrossTable(drawData, savedData) {
         crossBody.innerHTML = '';
         const drawCrosses = drawData?.cross || [];
         const savedMap = {};
-        (savedData || []).forEach(r => { 
-            if (r.type === 'cross') savedMap[r.row_index] = r; 
+        (savedData || []).forEach(r => {
+            if (r.type === 'cross') savedMap[r.row_index] = r;
         });
-        
+
         let filledCount = 0;
         const SHIFTS = ['早班', '晚班'];
-        
+
         if (drawCrosses.length === 0) {
             crossBody.innerHTML = '<tr><td colspan="20" style="text-align:center;padding:20px;color:#999;">📭 今日暂无您负责的路口被抽取</td></tr>';
             crossCount.textContent = '0 行';
             crossFillInfo.textContent = '📌 自动填入 0 行';
             return;
         }
-        
+
         let rowIndex = 0;
         drawCrosses.forEach((drawItem) => {
-            SHIFTS.forEach((shift, shiftIndex) => {
-                const savedKey = rowIndex;
-                const savedItem = savedMap[savedKey] || null;
-                
+            SHIFTS.forEach((shift) => {
+                const savedItem = savedMap[rowIndex] || null;
                 let row;
+                let imageUrls = [];
                 if (savedItem) {
+                    try { imageUrls = JSON.parse(savedItem.image_urls || '[]'); }
+                    catch (e) { imageUrls = []; }
                     row = {
                         type: 'cross',
                         row_index: rowIndex,
@@ -537,7 +573,7 @@
                         illegal_count: savedItem.illegal_count || '',
                         evaluator: savedItem.evaluator || currentUser,
                         remark: savedItem.remark || '',
-                        imageUrl: savedItem.imageUrl || '',
+                        imageUrls: imageUrls,
                         isAutoFilled: false,
                         shift: shift
                     };
@@ -565,7 +601,7 @@
                         illegal_count: '',
                         evaluator: currentUser,
                         remark: '',
-                        imageUrl: '',
+                        imageUrls: [],
                         isAutoFilled: true,
                         shift: shift
                     };
@@ -578,14 +614,13 @@
                 tr.dataset.type = 'cross';
                 tr.dataset.shift = shift;
                 tr.dataset.rowIndex = rowIndex;
-                
+
                 const isAuto = row.isAutoFilled;
                 const autoClass = isAuto ? 'auto-filled' : '';
                 const total = calcCrossTotal(row);
                 const compliance = calcCrossCompliance(row);
                 const yieldRate = calcYield(row);
 
-                // 更新行数据
                 row.total = total;
                 row.compliance_rate = compliance;
                 row.yield_rate = yieldRate;
@@ -615,36 +650,28 @@
                     <td class="image-cell"></td>
                 `;
                 crossBody.appendChild(tr);
-                
-                // 添加图片上传控件
+                tr.__rowData = row;
+
                 const imageCell = tr.querySelector('.image-cell');
                 const uploadDiv = createImageUploadCell(row, 'cross');
                 imageCell.appendChild(uploadDiv);
-                
-                // 绑定输入事件更新计算
+
                 const inputs = tr.querySelectorAll('input');
                 inputs.forEach(inp => {
-                    inp.addEventListener('input', function() {
-                        updateCrossRow(tr, row);
-                    });
-                    inp.addEventListener('change', function() {
-                        updateCrossRow(tr, row);
-                    });
+                    inp.addEventListener('input', function() { updateCrossRow(tr, row); });
+                    inp.addEventListener('change', function() { updateCrossRow(tr, row); });
                 });
-                
+
                 rowIndex++;
             });
         });
-        
+
         crossFillInfo.textContent = `📌 自动填入 ${filledCount} 行（每个点位早/晚各1行）`;
         crossCount.textContent = `${drawCrosses.length * 2} 行（${drawCrosses.length}个路口 × 2班次）`;
     }
 
-    // ===== 更新路口行数据 =====
     function updateCrossRow(tr, row) {
         const get = (sel) => tr.querySelector(sel)?.value || '';
-        const getNum = (sel) => parseFloat(tr.querySelector(sel)?.value) || 0;
-        
         row.non_motor_count = get('.cross-nonMotor');
         row.reverse_count = get('.cross-reverse');
         row.red_light_count = get('.cross-redLight');
@@ -660,55 +687,55 @@
         row.time_end = get('.cross-time-end');
         row.paixu = get('.cross-paixu');
         row.evaluator = get('.cross-evaluator') || currentUser;
-        
+
         const total = calcCrossTotal(row);
         const compliance = calcCrossCompliance(row);
         const yieldRate = calcYield(row);
-        
+
         row.total = total;
         row.compliance_rate = compliance;
         row.yield_rate = yieldRate;
-        
+
         const totalInput = tr.querySelector('.cross-total');
         if (totalInput) totalInput.value = total || '';
-        
+
         const compInput = tr.querySelector('.cross-compliance');
         if (compInput) compInput.value = compliance !== '' ? compliance.toFixed(1) + '%' : '';
-        
+
         const yieldInput = tr.querySelector('.cross-yieldRate');
         if (yieldInput) yieldInput.value = yieldRate !== '' ? yieldRate.toFixed(1) + '%' : '';
-        
-        // 检查是否需要上传图片
+
         checkImageRequired(row, 'cross');
     }
 
-    // ===== renderRoadTable（简化版） =====
+    // ===== 渲染路段表 =====
     function renderRoadTable(drawData, savedData) {
         roadBody.innerHTML = '';
         const drawRoads = drawData?.road || [];
         const savedMap = {};
-        (savedData || []).forEach(r => { 
-            if (r.type === 'road') savedMap[r.row_index] = r; 
+        (savedData || []).forEach(r => {
+            if (r.type === 'road') savedMap[r.row_index] = r;
         });
-        
+
         let filledCount = 0;
         const SHIFTS = ['早班', '晚班'];
-        
+
         if (drawRoads.length === 0) {
             roadBody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#999;">📭 今日暂无您负责的路段被抽取</td></tr>';
             roadCount.textContent = '0 行';
             roadFillInfo.textContent = '📌 自动填入 0 行';
             return;
         }
-        
+
         let rowIndex = 0;
         drawRoads.forEach((drawItem) => {
-            SHIFTS.forEach((shift, shiftIndex) => {
-                const savedKey = rowIndex;
-                const savedItem = savedMap[savedKey] || null;
-                
+            SHIFTS.forEach((shift) => {
+                const savedItem = savedMap[rowIndex] || null;
                 let row;
+                let imageUrls = [];
                 if (savedItem) {
+                    try { imageUrls = JSON.parse(savedItem.image_urls || '[]'); }
+                    catch (e) { imageUrls = []; }
                     row = {
                         type: 'road',
                         row_index: rowIndex,
@@ -722,7 +749,7 @@
                         yield_rate: savedItem.yield_rate || '',
                         evaluator: savedItem.evaluator || currentUser,
                         remark: savedItem.remark || '',
-                        imageUrl: savedItem.imageUrl || '',
+                        imageUrls: imageUrls,
                         isAutoFilled: false,
                         shift: shift
                     };
@@ -740,7 +767,7 @@
                         yield_rate: '',
                         evaluator: currentUser,
                         remark: '',
-                        imageUrl: '',
+                        imageUrls: [],
                         isAutoFilled: true,
                         shift: shift
                     };
@@ -753,7 +780,7 @@
                 tr.dataset.type = 'road';
                 tr.dataset.shift = shift;
                 tr.dataset.rowIndex = rowIndex;
-                
+
                 const isAuto = row.isAutoFilled;
                 const autoClass = isAuto ? 'auto-filled' : '';
                 const yieldRate = calcYield(row);
@@ -774,36 +801,28 @@
                     <td class="image-cell"></td>
                 `;
                 roadBody.appendChild(tr);
-                
-                // 添加图片上传控件
+                tr.__rowData = row;
+
                 const imageCell = tr.querySelector('.image-cell');
                 const uploadDiv = createImageUploadCell(row, 'road');
                 imageCell.appendChild(uploadDiv);
-                
-                // 绑定输入事件
+
                 const inputs = tr.querySelectorAll('input');
                 inputs.forEach(inp => {
-                    inp.addEventListener('input', function() {
-                        updateRoadRow(tr, row);
-                    });
-                    inp.addEventListener('change', function() {
-                        updateRoadRow(tr, row);
-                    });
+                    inp.addEventListener('input', function() { updateRoadRow(tr, row); });
+                    inp.addEventListener('change', function() { updateRoadRow(tr, row); });
                 });
-                
+
                 rowIndex++;
             });
         });
-        
+
         roadFillInfo.textContent = `📌 自动填入 ${filledCount} 行（每个点位早/晚各1行）`;
         roadCount.textContent = `${drawRoads.length * 2} 行（${drawRoads.length}个路段 × 2班次）`;
     }
 
-    // ===== 更新路段行数据 =====
     function updateRoadRow(tr, row) {
         const get = (sel) => tr.querySelector(sel)?.value || '';
-        const getNum = (sel) => parseFloat(tr.querySelector(sel)?.value) || 0;
-        
         row.right_turn_count = get('.road-rightTurn');
         row.no_yield_count = get('.road-noYield');
         row.remark = get('.road-remark');
@@ -811,152 +830,144 @@
         row.time_end = get('.road-time-end');
         row.paixu = get('.road-paixu');
         row.evaluator = get('.road-evaluator') || currentUser;
-        
+
         const yieldRate = calcYield(row);
         row.yield_rate = yieldRate;
-        
+
         const yieldInput = tr.querySelector('.road-yieldRate');
         if (yieldInput) yieldInput.value = yieldRate !== '' ? yieldRate.toFixed(1) + '%' : '';
-        
+
         checkImageRequired(row, 'road');
     }
 
+    // ===== 收集数据 =====
     function collectAllData() {
         const assessments = [];
+
         document.querySelectorAll('#crossBody .data-row').forEach(tr => {
             const get = (sel) => tr.querySelector(sel)?.value || '';
             const rowIndex = parseInt(tr.dataset.index) || 0;
-            // 获取图片URL
-            const imageCell = tr.querySelector('.image-upload-cell');
-            let imageUrl = '';
-            if (imageCell) {
-                const img = imageCell.querySelector('.image-preview');
-                if (img && img.src) imageUrl = img.src;
-            }
-            assessments.push({ 
-                type: 'cross', 
-                row_index: rowIndex, 
-                paixu: get('.cross-paixu'), 
-                name: get('.cross-name'), 
-                camera: get('.cross-camera'), 
-                direction: get('.cross-direction'), 
-                time_start: get('.cross-time-start'), 
-                time_end: get('.cross-time-end'), 
-                non_motor_count: get('.cross-nonMotor'), 
-                reverse_count: get('.cross-reverse'), 
-                red_light_count: get('.cross-redLight'), 
-                stop_line_count: get('.cross-stopLine'), 
-                no_crosswalk_count: get('.cross-noCrosswalk'), 
-                other_count: get('.cross-other'), 
-                total: get('.cross-total'), 
-                compliance_rate: get('.cross-compliance'), 
-                right_turn_count: get('.cross-rightTurn'), 
-                no_yield_count: get('.cross-noYield'), 
-                yield_rate: get('.cross-yieldRate'), 
-                illegal_count: get('.cross-illegal'), 
-                evaluator: get('.cross-evaluator') || currentUser, 
+            // 从闭包 row 拿 imageUrls（通过 tr.__row 绑定）
+            const rowObj = tr.__rowData || {};
+            assessments.push({
+                type: 'cross',
+                row_index: rowIndex,
+                paixu: get('.cross-paixu'),
+                name: get('.cross-name'),
+                camera: get('.cross-camera'),
+                direction: get('.cross-direction'),
+                time_start: get('.cross-time-start'),
+                time_end: get('.cross-time-end'),
+                non_motor_count: get('.cross-nonMotor'),
+                reverse_count: get('.cross-reverse'),
+                red_light_count: get('.cross-redLight'),
+                stop_line_count: get('.cross-stopLine'),
+                no_crosswalk_count: get('.cross-noCrosswalk'),
+                other_count: get('.cross-other'),
+                total: get('.cross-total'),
+                compliance_rate: get('.cross-compliance'),
+                right_turn_count: get('.cross-rightTurn'),
+                no_yield_count: get('.cross-noYield'),
+                yield_rate: get('.cross-yieldRate'),
+                illegal_count: get('.cross-illegal'),
+                evaluator: get('.cross-evaluator') || currentUser,
                 remark: get('.cross-remark'),
-                imageUrl: imageUrl
+                imageUrl: Array.isArray(rowObj.imageUrls) ? rowObj.imageUrls.slice() : []
             });
         });
+
         document.querySelectorAll('#roadBody .data-row').forEach(tr => {
             const get = (sel) => tr.querySelector(sel)?.value || '';
             const rowIndex = parseInt(tr.dataset.index) || 0;
-            let imageUrl = '';
-            const imageCell = tr.querySelector('.image-upload-cell');
-            if (imageCell) {
-                const img = imageCell.querySelector('.image-preview');
-                if (img && img.src) imageUrl = img.src;
-            }
-            assessments.push({ 
-                type: 'road', 
-                row_index: rowIndex, 
-                paixu: get('.road-paixu'), 
-                name: get('.road-name'), 
-                camera: get('.road-device'), 
-                direction: '', 
-                time_start: get('.road-time-start'), 
-                time_end: get('.road-time-end'), 
-                non_motor_count: '', 
-                reverse_count: '', 
-                red_light_count: '', 
-                stop_line_count: '', 
-                no_crosswalk_count: '', 
-                other_count: '', 
-                total: '', 
-                compliance_rate: '', 
-                right_turn_count: get('.road-rightTurn'), 
-                no_yield_count: get('.road-noYield'), 
-                yield_rate: get('.road-yieldRate'), 
-                illegal_count: '', 
-                evaluator: get('.road-evaluator') || currentUser, 
+            const rowObj = tr.__rowData || {};
+            assessments.push({
+                type: 'road',
+                row_index: rowIndex,
+                paixu: get('.road-paixu'),
+                name: get('.road-name'),
+                camera: get('.road-device'),
+                direction: '',
+                time_start: get('.road-time-start'),
+                time_end: get('.road-time-end'),
+                non_motor_count: '',
+                reverse_count: '',
+                red_light_count: '',
+                stop_line_count: '',
+                no_crosswalk_count: '',
+                other_count: '',
+                total: '',
+                compliance_rate: '',
+                right_turn_count: get('.road-rightTurn'),
+                no_yield_count: get('.road-noYield'),
+                yield_rate: get('.road-yieldRate'),
+                illegal_count: '',
+                evaluator: get('.road-evaluator') || currentUser,
                 remark: get('.road-remark'),
-                imageUrl: imageUrl
+                imageUrl: Array.isArray(rowObj.imageUrls) ? rowObj.imageUrls.slice() : []
             });
         });
+
         return assessments;
     }
 
-    // ===== 验证并提交 =====
+    // ===== 提交 =====
     async function doSubmit() {
         const assessments = collectAllData();
         const valid = assessments.filter(r => r.name && r.name.trim() !== '');
         if (valid.length === 0) { alert('⚠️ 没有可提交的数据，请先填写测评内容'); return; }
-        
-        // 验证强制上传图片
-        let imageErrors = [];
-        valid.forEach((row, idx) => {
+
+        // 98% 强制图片校验
+        const imageErrors = [];
+        valid.forEach((row) => {
             const type = row.type === 'cross' ? '路口' : '路段';
             const name = row.name || '未知点位';
             const compliance = parseFloat(row.compliance_rate) || 0;
             const yieldRate = parseFloat(row.yield_rate) || 0;
-            const hasImage = row.imageUrl && row.imageUrl !== '';
-            
+            const hasImage = Array.isArray(row.imageUrl) && row.imageUrl.length > 0;
+
             let required = false;
             let reason = '';
-            
+
             if (row.type === 'cross') {
-                if (compliance > 0 && compliance < 90) {
-                    required = true;
-                    reason = `非机动车遵章率 ${compliance.toFixed(1)}% < 90%`;
-                }
-                if (yieldRate > 0 && yieldRate < 95) {
-                    required = true;
-                    reason = `礼让率 ${yieldRate.toFixed(1)}% < 95%`;
-                }
+                if (compliance > 0 && compliance < 98) { required = true; reason = `遵章率 ${compliance.toFixed(1)}% < 98%`; }
+                if (yieldRate > 0 && yieldRate < 98) { required = true; reason = `礼让率 ${yieldRate.toFixed(1)}% < 98%`; }
             } else if (row.type === 'road') {
-                if (yieldRate > 0 && yieldRate < 95) {
-                    required = true;
-                    reason = `礼让率 ${yieldRate.toFixed(1)}% < 95%`;
-                }
+                if (yieldRate > 0 && yieldRate < 98) { required = true; reason = `礼让率 ${yieldRate.toFixed(1)}% < 98%`; }
             }
-            
+
             if (required && !hasImage) {
-                imageErrors.push(`${type} "${name}"：${reason}，必须上传图片！`);
+                imageErrors.push(`${type}「${name}」：${reason}，必须上传图片！`);
             }
         });
-        
+
         if (imageErrors.length > 0) {
             alert('⚠️ 以下点位需要上传图片：\n\n' + imageErrors.join('\n'));
             return;
         }
-        
+
         if (!confirm(`确认提交 ${valid.length} 条测评数据到服务器？`)) return;
-        try { await submitAssessments(valid); await loadAllData(); } catch (e) {}
+        try {
+            await submitAssessments(valid);
+            await loadAllData();
+        } catch (e) {}
     }
 
+    // ===== 导出 XLSX =====
     function doExport() {
         const assessments = collectAllData();
         const valid = assessments.filter(r => r.name && r.name.trim() !== '');
         if (valid.length === 0) { alert('⚠️ 没有数据可导出'); return; }
         const crossData = valid.filter(r => r.type === 'cross');
         const roadData = valid.filter(r => r.type === 'road');
+
         const crossHeaders = ['班次', '测评点位', '摄像头位置', '路口方向', '开始时间', '结束时间', '非机动车行人数', '逆行', '闯红灯', '越线停车', '行人不走斑马线', '其他', '合计', '非机动车行人遵章率', '右转弯机动车数量', '未礼让数量', '礼让率', '路口违法车辆数', '测评人', '备注', '图片'];
-        const crossRows = crossData.map(r => [r.paixu, r.name, r.camera, r.direction, r.time_start, r.time_end, r.non_motor_count, r.reverse_count, r.red_light_count, r.stop_line_count, r.no_crosswalk_count, r.other_count, r.total, r.compliance_rate, r.right_turn_count, r.no_yield_count, r.yield_rate, r.illegal_count, r.evaluator, r.remark, r.imageUrl || '']);
+        const crossRows = crossData.map(r => [r.paixu, r.name, r.camera, r.direction, r.time_start, r.time_end, r.non_motor_count, r.reverse_count, r.red_light_count, r.stop_line_count, r.no_crosswalk_count, r.other_count, r.total, r.compliance_rate, r.right_turn_count, r.no_yield_count, r.yield_rate, r.illegal_count, r.evaluator, r.remark, (r.imageUrl || []).join(' | ')]);
         const crossSheet = XLSX.utils.aoa_to_sheet([crossHeaders, ...crossRows]);
+
         const roadHeaders = ['班次', '路段名称', '视频设备名称', '开始时间', '结束时间', '右转弯机动车数量', '未礼让数量', '礼让率', '测评人', '备注', '图片'];
-        const roadRows = roadData.map(r => [r.paixu, r.name, r.camera, r.time_start, r.time_end, r.right_turn_count, r.no_yield_count, r.yield_rate, r.evaluator, r.remark, r.imageUrl || '']);
+        const roadRows = roadData.map(r => [r.paixu, r.name, r.camera, r.time_start, r.time_end, r.right_turn_count, r.no_yield_count, r.yield_rate, r.evaluator, r.remark, (r.imageUrl || []).join(' | ')]);
         const roadSheet = XLSX.utils.aoa_to_sheet([roadHeaders, ...roadRows]);
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, crossSheet, '路口');
         XLSX.utils.book_append_sheet(wb, roadSheet, '路段');
@@ -971,12 +982,12 @@
 
     function doReset() {
         if (!confirm('⚠️ 确认清空本日所有已填写数据？此操作不可撤销！')) return;
-        localStorage.removeItem('assessment_data');
         loadAllData();
         saveStatus.textContent = '🔄 已重置';
         saveStatus.style.color = '#d48c2c';
     }
 
+    // ===== 加载全部 =====
     async function loadAllData() {
         setSyncStatus('syncing', '⏳ 加载数据...');
         try {
