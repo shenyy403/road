@@ -3,6 +3,10 @@ const cors = require('cors');
 const session = require('express-session');
 const db = require('./database');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const archiver = require('archiver');
+const XLSX = require('xlsx');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,7 +62,7 @@ function getTodayChina() {
     return `${year}-${month}-${day}`;
 }
 
-// ============ 获取本周一到周五的日期 ============
+// ============ 获取本周一到周五的日期（兜底用） ============
 function getWeekDatesFromToday() {
     const today = new Date();
     const todayDay = today.getDay();
@@ -97,6 +101,26 @@ function requireAuth(req, res, next) {
         return res.status(401).json({ error: '请先登录' });
     }
     next();
+}
+
+// Promise 包装，方便用 async/await
+function dbGet(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
+    });
+}
+function dbAll(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
+    });
+}
+function dbRun(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function (err) {
+            if (err) reject(err);
+            else resolve({ lastID: this.lastID, changes: this.changes });
+        });
+    });
 }
 
 // ============ 登录相关 ============
@@ -278,6 +302,82 @@ app.get('/api/active-plan', requireAuth, (req, res) => {
     });
 });
 
+// ============ 轮次配置（管理员选日期） ============
+app.post('/api/draw-rounds', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: '需要管理员权限' });
+    }
+    const { roundKey, planKey, dates } = req.body;
+    if (!roundKey || !Array.isArray(dates) || dates.length === 0) {
+        return res.status(400).json({ error: '请提供轮次标识和日期列表' });
+    }
+    db.run(
+        `INSERT INTO draw_rounds (round_key, plan_key, dates, created_by)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(round_key) DO UPDATE SET
+           plan_key = excluded.plan_key,
+           dates = excluded.dates`,
+        [roundKey, planKey || 'plan_a', JSON.stringify(dates), req.session.user.username],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            logOperation(req.session.user.username, '保存轮次',
+                `${roundKey}: ${dates.join(',')}`, getClientIp(req));
+            res.json({ success: true });
+        }
+    );
+});
+
+app.get('/api/draw-rounds/:roundKey', requireAuth, (req, res) => {
+    db.get('SELECT * FROM draw_rounds WHERE round_key = ?', [req.params.roundKey], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.json(null);
+        res.json({ ...row, dates: JSON.parse(row.dates) });
+    });
+});
+
+app.get('/api/draw-rounds', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: '需要管理员权限' });
+    }
+    db.all('SELECT * FROM draw_rounds ORDER BY created_at DESC', (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows.map(r => ({ ...r, dates: JSON.parse(r.dates) })));
+    });
+});
+
+// ============ 自定义方案（管理员勾选资源） ============
+app.get('/api/custom-plans', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
+    db.all('SELECT * FROM custom_plans ORDER BY created_at DESC', (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows.map(r => ({ ...r, resource_ids: JSON.parse(r.resource_ids) })));
+    });
+});
+
+app.post('/api/custom-plans', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
+    const { planName, resourceIds } = req.body;
+    if (!planName || !Array.isArray(resourceIds) || resourceIds.length === 0) {
+        return res.status(400).json({ error: '请提供方案名和资源列表' });
+    }
+    db.run(
+        'INSERT INTO custom_plans (plan_name, resource_ids, created_by) VALUES (?, ?, ?)',
+        [planName, JSON.stringify(resourceIds), req.session.user.username],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, id: this.lastID, planKey: 'custom_' + this.lastID });
+        }
+    );
+});
+
+app.delete('/api/custom-plans/:id', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
+    db.run('DELETE FROM custom_plans WHERE id = ?', [req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, deleted: this.changes });
+    });
+});
+
 // ============ 抽取记录 ============
 app.get('/api/records/:weekKey', requireAuth, (req, res) => {
     const { weekKey } = req.params;
@@ -345,8 +445,8 @@ app.post('/api/week-participants', requireAuth, (req, res) => {
         return res.status(403).json({ error: '需要管理员权限' });
     }
 
-    const { participants } = req.body;
-    const weekKey = getWeekKey();
+    const { participants, weekKey: bodyWeekKey } = req.body;
+    const weekKey = bodyWeekKey || getWeekKey();
     const username = req.session.user.username;
     const ip = getClientIp(req);
 
@@ -372,7 +472,7 @@ app.post('/api/week-participants', requireAuth, (req, res) => {
 
 // ============ 获取参与用户 ============
 app.get('/api/week-participants', requireAuth, (req, res) => {
-    const weekKey = getWeekKey();
+    const weekKey = req.query.weekKey || getWeekKey();
 
     db.all(
         `SELECT username, is_participating FROM user_participants WHERE week_key = ?`,
@@ -407,328 +507,205 @@ app.get('/api/week-participants', requireAuth, (req, res) => {
     );
 });
 
-// ============ 均衡抽取整周（带优先少分用户） ============
-app.post('/api/draw-week', requireAuth, (req, res) => {
-    const { weekKey, planKey } = req.body;
+// ============ 均衡抽取（按轮次日期 + 工作量尽可能平均） ============
+app.post('/api/draw-week', requireAuth, async (req, res) => {
+    const { weekKey, planKey, roundKey } = req.body;
     const username = req.session.user.username;
     const ip = getClientIp(req);
 
     if (!weekKey) {
-        return res.status(400).json({ error: '缺少必要参数' });
+        return res.status(400).json({ error: '缺少必要参数 weekKey' });
     }
 
-    const dates = getWeekDatesFromToday();
-
-    db.get('SELECT COUNT(*) as count FROM draw_records WHERE week_key = ?', [weekKey], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (row.count > 0) {
-            return res.json({
-                success: false,
-                message: '⚠️ 本周已有抽取记录，请先重置再重新抽取！'
-            });
+    try {
+        // 1. 已有记录？
+        const exist = await dbGet('SELECT COUNT(*) as count FROM draw_records WHERE week_key = ?', [weekKey]);
+        if (exist.count > 0) {
+            return res.json({ success: false, message: '⚠️ 本轮已有抽取记录，请先重置再重新抽取！' });
         }
 
-        db.all('SELECT username, is_participating FROM user_participants WHERE week_key = ?', [weekKey], (err, participantRows) => {
-            if (err) return res.status(500).json({ error: err.message });
+        // 2. 日期：优先用轮次配置，否则回退到周一~周五
+        let dates;
+        if (roundKey) {
+            const round = await dbGet('SELECT dates FROM draw_rounds WHERE round_key = ?', [roundKey]);
+            dates = round ? JSON.parse(round.dates) : getWeekDatesFromToday();
+        } else {
+            dates = getWeekDatesFromToday();
+        }
+        if (!dates || dates.length === 0) {
+            return res.status(400).json({ error: '没有可用的抽取日期' });
+        }
 
-            let activeUsers;
-            if (participantRows.length > 0) {
-                activeUsers = participantRows.filter(r => r.is_participating === 1).map(r => r.username);
-            } else {
-                db.all("SELECT username FROM users WHERE role = 'user'", (err2, allUsers) => {
-                    if (err2) return res.status(500).json({ error: err2.message });
-                    activeUsers = allUsers.map(r => r.username);
-                    doDraw(activeUsers);
-                });
-                return;
-            }
-            doDraw(activeUsers);
+        // 3. 参与用户
+        const participantRows = await dbAll(
+            'SELECT username, is_participating FROM user_participants WHERE week_key = ?', [weekKey]);
+        let activeUsers;
+        if (participantRows.length > 0) {
+            activeUsers = participantRows.filter(r => r.is_participating === 1).map(r => r.username);
+        } else {
+            const allUsers = await dbAll("SELECT username FROM users WHERE role = 'user'");
+            activeUsers = allUsers.map(r => r.username);
+        }
+        if (activeUsers.length === 0) {
+            return res.json({ success: false, message: '⚠️ 没有参与用户！' });
+        }
+
+        // 4. 当前方案
+        const planRow = await dbGet('SELECT plan_key FROM resource_plans WHERE is_active = 1');
+        const currentPlan = planKey || (planRow ? planRow.plan_key : 'plan_a');
+
+        // 5. 资源：支持 custom_<id>
+        let allResources;
+        if (String(currentPlan).startsWith('custom_')) {
+            const id = currentPlan.replace('custom_', '');
+            const cp = await dbGet('SELECT resource_ids FROM custom_plans WHERE id = ?', [id]);
+            if (!cp) return res.status(400).json({ error: '自定义方案不存在' });
+            const ids = JSON.parse(cp.resource_ids);
+            const placeholders = ids.map(() => '?').join(',');
+            allResources = await dbAll(`SELECT * FROM resources WHERE id IN (${placeholders})`, ids);
+        } else {
+            allResources = await dbAll('SELECT * FROM resources WHERE plan_key = ?', [currentPlan]);
+        }
+
+        const shuffledCrosses = allResources.filter(r => r.type === 'cross').sort(() => Math.random() - 0.5);
+        const shuffledRoads = allResources.filter(r => r.type === 'road').sort(() => Math.random() - 0.5);
+
+        // 6. 贪心均衡分配：路口 1.0，路段 0.5
+        const userAssignments = activeUsers.map(u => ({
+            username: u, crossCount: 0, roadCount: 0, totalWork: 0, crosses: [], roads: []
+        }));
+
+        const allItems = [
+            ...shuffledCrosses.map(r => ({ r, w: 1.0 })),
+            ...shuffledRoads.map(r => ({ r, w: 0.5 }))
+        ].sort((a, b) => b.w - a.w);
+
+        for (const item of allItems) {
+            userAssignments.sort((a, b) =>
+                (a.totalWork - b.totalWork) ||
+                ((a.crossCount + a.roadCount) - (b.crossCount + b.roadCount))
+            );
+            const u = userAssignments[0];
+            if (item.r.type === 'cross') { u.crosses.push(item.r); u.crossCount++; }
+            else { u.roads.push(item.r); u.roadCount++; }
+            u.totalWork += item.w;
+        }
+
+        // 7. 资源 -> 用户 映射
+        const resourceToUser = {};
+        userAssignments.forEach(a => {
+            a.crosses.forEach(c => { resourceToUser[c.id] = a.username; });
+            a.roads.forEach(r => { resourceToUser[r.id] = a.username; });
         });
-    });
 
-    function doDraw(activeUsers) {
-        db.get('SELECT plan_key FROM resource_plans WHERE is_active = 1', (err, planRow) => {
-            if (err) return res.status(500).json({ error: err.message });
-            const currentPlan = planRow ? planRow.plan_key : 'plan_a';
+        // 8. 按天平均分
+        const allCrossesToAssign = [];
+        const allRoadsToAssign = [];
+        userAssignments.forEach(a => {
+            allCrossesToAssign.push(...a.crosses);
+            allRoadsToAssign.push(...a.roads);
+        });
+        allCrossesToAssign.sort(() => Math.random() - 0.5);
+        allRoadsToAssign.sort(() => Math.random() - 0.5);
 
-            db.all('SELECT * FROM resources WHERE plan_key = ?', [currentPlan], (err, allResources) => {
-                if (err) return res.status(500).json({ error: err.message });
+        const totalDays = dates.length;
+        const baseCrossPerDay = Math.floor(allCrossesToAssign.length / totalDays);
+        const remainCrosses = allCrossesToAssign.length - baseCrossPerDay * totalDays;
+        const baseRoadPerDay = Math.floor(allRoadsToAssign.length / totalDays);
+        const remainRoads = allRoadsToAssign.length - baseRoadPerDay * totalDays;
 
-                const roads = allResources.filter(r => r.type === 'road');
-                const crosses = allResources.filter(r => r.type === 'cross');
+        let crossIdx = 0, roadIdx = 0;
+        const allRecords = [];
+        const dailyStats = [];
 
-                const shuffledRoads = roads.sort(() => Math.random() - 0.5);
-                const shuffledCrosses = crosses.sort(() => Math.random() - 0.5);
+        dates.forEach((date, dayIndex) => {
+            let dayCrossCount = baseCrossPerDay + (dayIndex < remainCrosses ? 1 : 0);
+            const dayCrosses = allCrossesToAssign.slice(crossIdx, crossIdx + dayCrossCount);
+            crossIdx += dayCrossCount;
 
-                const userCount = activeUsers.length;
-                const totalCrosses = shuffledCrosses.length;
-                const totalRoads = shuffledRoads.length;
-                const totalWork = totalCrosses * 1.0 + totalRoads * 0.5;
-                const avgWork = totalWork / userCount;
+            let dayRoadCount = baseRoadPerDay + (dayIndex < remainRoads ? 1 : 0);
+            const dayRoads = allRoadsToAssign.slice(roadIdx, roadIdx + dayRoadCount);
+            roadIdx += dayRoadCount;
 
-                // ===== 指定"优先少分"用户 =====
-                const priorityLowUsers = ['李佳', '佟璘', '赵鑫宇', '肖阳', '吴达'];
-                
-                const lowPriorityUsers = [];
-                const normalUsers = [];
-                activeUsers.forEach(user => {
-                    if (priorityLowUsers.includes(user)) {
-                        lowPriorityUsers.push(user);
-                    } else {
-                        normalUsers.push(user);
-                    }
-                });
+            const dayRecords = [];
+            dayCrosses.forEach(c => dayRecords.push({
+                resource_id: c.id, draw_date: date, week_key: weekKey,
+                assigned_to: resourceToUser[c.id] || ''
+            }));
+            dayRoads.forEach(r => dayRecords.push({
+                resource_id: r.id, draw_date: date, week_key: weekKey,
+                assigned_to: resourceToUser[r.id] || ''
+            }));
 
-                const sortedUsers = [...normalUsers, ...lowPriorityUsers];
-                const normalCount = normalUsers.length;
-                const lowCount = lowPriorityUsers.length;
-                
-                let userTargets = {};
-                if (normalCount === 0) {
-                    sortedUsers.forEach(user => {
-                        userTargets[user] = avgWork;
-                    });
-                } else {
-                    // ===== 优先少分用户目标：avgWork 的 50%，最低 0.5 =====
-                    const lowTarget = Math.min(Math.max(avgWork * 0.5, 0.5), 1.0);
-                    
-                    const lowTotalWork = lowCount * lowTarget;
-                    const normalTotalWork = totalWork - lowTotalWork;
-                    const normalTarget = normalTotalWork / normalCount;
-                    
-                    sortedUsers.forEach(user => {
-                        if (priorityLowUsers.includes(user)) {
-                            userTargets[user] = lowTarget;
-                        } else {
-                            userTargets[user] = normalTarget;
-                        }
-                    });
-                }
-
-                const userAssignments = sortedUsers.map(user => ({
-                    username: user,
-                    crossCount: 0,
-                    roadCount: 0,
-                    totalWork: 0,
-                    crosses: [],
-                    roads: [],
-                    targetWork: userTargets[user] || avgWork
-                }));
-
-                // ===== 分配路口 =====
-                let crossIndex = 0;
-                let round = 0;
-                const maxRounds = 30;
-                
-                while (crossIndex < shuffledCrosses.length && round < maxRounds) {
-                    round++;
-                    for (let u = 0; u < userAssignments.length && crossIndex < shuffledCrosses.length; u++) {
-                        const target = userAssignments[u].targetWork;
-                        if (userAssignments[u].totalWork >= target + 0.2) continue;
-                        userAssignments[u].crosses.push(shuffledCrosses[crossIndex]);
-                        userAssignments[u].crossCount++;
-                        userAssignments[u].totalWork += 1.0;
-                        crossIndex++;
-                    }
-                    if (crossIndex < shuffledCrosses.length && userAssignments.every(u => u.totalWork >= u.targetWork)) {
-                        for (let u = 0; u < userAssignments.length && crossIndex < shuffledCrosses.length; u++) {
-                            userAssignments.sort((a, b) => a.totalWork - b.totalWork);
-                            const idx = userAssignments.findIndex(a => !priorityLowUsers.includes(a.username));
-                            if (idx >= 0 && userAssignments[idx].totalWork < avgWork + 0.8) {
-                                userAssignments[idx].crosses.push(shuffledCrosses[crossIndex]);
-                                userAssignments[idx].crossCount++;
-                                userAssignments[idx].totalWork += 1.0;
-                                crossIndex++;
-                            } else {
-                                userAssignments[u % userAssignments.length].crosses.push(shuffledCrosses[crossIndex]);
-                                userAssignments[u % userAssignments.length].crossCount++;
-                                userAssignments[u % userAssignments.length].totalWork += 1.0;
-                                crossIndex++;
-                            }
-                        }
-                    }
-                }
-
-                // ===== 分配路段 =====
-                let roadIndex = 0;
-                round = 0;
-                while (roadIndex < shuffledRoads.length && round < maxRounds) {
-                    round++;
-                    for (let u = 0; u < userAssignments.length && roadIndex < shuffledRoads.length; u++) {
-                        const target = userAssignments[u].targetWork;
-                        if (userAssignments[u].totalWork >= target + 0.2) continue;
-                        userAssignments[u].roads.push(shuffledRoads[roadIndex]);
-                        userAssignments[u].roadCount++;
-                        userAssignments[u].totalWork += 0.5;
-                        roadIndex++;
-                    }
-                    if (roadIndex < shuffledRoads.length && userAssignments.every(u => u.totalWork >= u.targetWork)) {
-                        for (let u = 0; u < userAssignments.length && roadIndex < shuffledRoads.length; u++) {
-                            userAssignments.sort((a, b) => a.totalWork - b.totalWork);
-                            const idx = userAssignments.findIndex(a => !priorityLowUsers.includes(a.username));
-                            if (idx >= 0 && userAssignments[idx].totalWork < avgWork + 0.8) {
-                                userAssignments[idx].roads.push(shuffledRoads[roadIndex]);
-                                userAssignments[idx].roadCount++;
-                                userAssignments[idx].totalWork += 0.5;
-                                roadIndex++;
-                            } else {
-                                userAssignments[u % userAssignments.length].roads.push(shuffledRoads[roadIndex]);
-                                userAssignments[u % userAssignments.length].roadCount++;
-                                userAssignments[u % userAssignments.length].totalWork += 0.5;
-                                roadIndex++;
-                            }
-                        }
-                    }
-                }
-
-                // ============================================================
-                // 生成抽取记录
-                // ============================================================
-                const allRecords = [];
-                const dailyStats = [];
-
-                const resourceToUser = {};
-                userAssignments.forEach(a => {
-                    a.crosses.forEach(c => { resourceToUser[c.id] = a.username; });
-                    a.roads.forEach(r => { resourceToUser[r.id] = a.username; });
-                });
-
-                let allCrossesToAssign = [];
-                let allRoadsToAssign = [];
-                userAssignments.forEach(a => {
-                    allCrossesToAssign = allCrossesToAssign.concat(a.crosses);
-                    allRoadsToAssign = allRoadsToAssign.concat(a.roads);
-                });
-
-                allCrossesToAssign = allCrossesToAssign.sort(() => Math.random() - 0.5);
-                allRoadsToAssign = allRoadsToAssign.sort(() => Math.random() - 0.5);
-
-                const totalCrossesToAssign = allCrossesToAssign.length;
-                const totalRoadsToAssign = allRoadsToAssign.length;
-                const totalDays = dates.length;
-
-                const baseCrossPerDay = Math.floor(totalCrossesToAssign / totalDays);
-                const remainCrosses = totalCrossesToAssign - baseCrossPerDay * totalDays;
-
-                const baseRoadPerDay = Math.floor(totalRoadsToAssign / totalDays);
-                const remainRoads = totalRoadsToAssign - baseRoadPerDay * totalDays;
-
-                let crossIdx = 0;
-                let roadIdx = 0;
-
-                dates.forEach((date, dayIndex) => {
-                    let dayCrossCount = baseCrossPerDay;
-                    if (dayIndex < remainCrosses) dayCrossCount++;
-
-                    const dayCrosses = allCrossesToAssign.slice(crossIdx, crossIdx + dayCrossCount);
-                    crossIdx += dayCrossCount;
-
-                    let dayRoadCount = baseRoadPerDay;
-                    if (dayIndex < remainRoads) dayRoadCount++;
-
-                    const dayRoads = allRoadsToAssign.slice(roadIdx, roadIdx + dayRoadCount);
-                    roadIdx += dayRoadCount;
-
-                    const dayRecords = [];
-                    dayCrosses.forEach(cross => {
-                        dayRecords.push({
-                            resource_id: cross.id,
-                            draw_date: date,
-                            week_key: weekKey,
-                            assigned_to: resourceToUser[cross.id] || ''
-                        });
-                    });
-                    dayRoads.forEach(road => {
-                        dayRecords.push({
-                            resource_id: road.id,
-                            draw_date: date,
-                            week_key: weekKey,
-                            assigned_to: resourceToUser[road.id] || ''
-                        });
-                    });
-
-                    allRecords.push(...dayRecords);
-
-                    dailyStats.push({
-                        date: date,
-                        dayOfWeek: getDayOfWeek(date),
-                        roadCount: dayRoads.length,
-                        crossCount: dayCrosses.length,
-                        total: dayRecords.length
-                    });
-                });
-
-                if (allRecords.length === 0) {
-                    return res.json({ success: false, message: '⚠️ 没有可用的资源！' });
-                }
-
-                db.serialize(() => {
-                    db.run('BEGIN TRANSACTION');
-                    const stmt = db.prepare(
-                        'INSERT INTO draw_records (resource_id, draw_date, week_key, assigned_to) VALUES (?, ?, ?, ?)'
-                    );
-
-                    allRecords.forEach(record => {
-                        stmt.run(record.resource_id, record.draw_date, record.week_key, record.assigned_to);
-                    });
-
-                    stmt.finalize();
-                    db.run('COMMIT', (err) => {
-                        if (err) {
-                            db.run('ROLLBACK');
-                            return res.status(500).json({ error: '提交失败' });
-                        }
-
-                        const totalCount = allRecords.length;
-                        logOperation(username, '批量抽取整周',
-                            `共${totalCount}条记录，${userAssignments.length}人参与，方案: ${currentPlan}`,
-                            ip
-                        );
-
-                        const workReport = userAssignments.map(a => {
-                            const isLow = priorityLowUsers.includes(a.username);
-                            return `${a.username}${isLow ? ' (少分)' : ''}: 路口${a.crossCount}个 + 路段${a.roadCount}个 = ${a.totalWork.toFixed(1)}`;
-                        }).join(' | ');
-
-                        const detailMsg = dailyStats.map(d =>
-                            d.date + '(' + d.dayOfWeek + '): 路段' + d.roadCount + '个 + 路口' + d.crossCount + '个 = ' + d.total + '个'
-                        ).join('\n');
-
-                        res.json({
-                            success: true,
-                            message: `✅ 成功抽取整周！共 ${totalCount} 个点位\n\n📊 工作量分配：\n${workReport}`,
-                            total: totalCount,
-                            days: dates.length,
-                            dailyStats: dailyStats,
-                            userWorkload: userAssignments.map(a => ({
-                                username: a.username,
-                                crossCount: a.crossCount,
-                                roadCount: a.roadCount,
-                                totalWork: a.totalWork,
-                                isLowPriority: priorityLowUsers.includes(a.username)
-                            })),
-                            planKey: currentPlan
-                        });
-                    });
-                });
+            allRecords.push(...dayRecords);
+            dailyStats.push({
+                date, dayOfWeek: getDayOfWeek(date),
+                roadCount: dayRoads.length, crossCount: dayCrosses.length,
+                total: dayRecords.length
             });
         });
+
+        if (allRecords.length === 0) {
+            return res.json({ success: false, message: '⚠️ 没有可用的资源！' });
+        }
+
+        // 9. 事务写入
+        await new Promise((resolve, reject) => {
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
+                const stmt = db.prepare(
+                    'INSERT INTO draw_records (resource_id, draw_date, week_key, assigned_to) VALUES (?, ?, ?, ?)'
+                );
+                allRecords.forEach(r => stmt.run(r.resource_id, r.draw_date, r.week_key, r.assigned_to));
+                stmt.finalize();
+                db.run('COMMIT', (e) => e ? reject(e) : resolve());
+            });
+        });
+
+        const workReport = userAssignments
+            .slice().sort((a, b) => a.username.localeCompare(b.username, 'zh'))
+            .map(a => `${a.username}: 路口${a.crossCount} + 路段${a.roadCount} = ${a.totalWork.toFixed(1)}`)
+            .join(' | ');
+
+        const detailMsg = dailyStats.map(d =>
+            `${d.date}(${d.dayOfWeek}): 路段${d.roadCount} + 路口${d.crossCount} = ${d.total}`
+        ).join('\n');
+
+        logOperation(username, '批量抽取',
+            `共${allRecords.length}条，${userAssignments.length}人，方案:${currentPlan}，日期:${dates.join(',')}`, ip);
+
+        res.json({
+            success: true,
+            message: `✅ 抽取完成！共 ${allRecords.length} 个点位\n\n📊 工作量分配：\n${workReport}\n\n📅 每日分布：\n${detailMsg}`,
+            total: allRecords.length,
+            days: dates.length,
+            dailyStats,
+            userWorkload: userAssignments.map(a => ({
+                username: a.username, crossCount: a.crossCount,
+                roadCount: a.roadCount, totalWork: a.totalWork
+            })),
+            planKey: currentPlan,
+            dates
+        });
+    } catch (e) {
+        console.error('抽取失败:', e);
+        res.status(500).json({ error: e.message });
     }
 });
 
-// ============ 重置本周 ============
+// ============ 重置本轮 ============
 app.delete('/api/reset/:weekKey', requireAuth, (req, res) => {
     const { weekKey } = req.params;
     const username = req.session.user.username;
     const ip = getClientIp(req);
     db.run('DELETE FROM draw_records WHERE week_key = ?', [weekKey], function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        logOperation(username, '重置本周', `删除 ${this.changes} 条抽取记录`, ip);
+        logOperation(username, '重置本轮', `删除 ${this.changes} 条抽取记录`, ip);
         res.json({ success: true, deleted: this.changes });
     });
 });
 
-// ===== 导入单条抽取记录（管理员用） =====
+// ===== 导入单条抽取记录 =====
 app.post('/api/import-draw-record', requireAuth, (req, res) => {
     if (req.session.user.role !== 'admin') {
         return res.status(403).json({ error: '需要管理员权限' });
@@ -755,7 +732,7 @@ app.post('/api/import-draw-record', requireAuth, (req, res) => {
 // ============ 测评数据相关 ============
 app.get('/api/my-assessments-today', requireAuth, (req, res) => {
     const username = req.session.user.username;
-    const todayStr = getTodayChina();
+    const todayStr = req.query.date || getTodayChina();
 
     db.all(
         `SELECT * FROM assessments
@@ -765,130 +742,177 @@ app.get('/api/my-assessments-today', requireAuth, (req, res) => {
         [username, todayStr],
         (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
+            // 解析 image_urls
+            rows.forEach(r => {
+                try { r.imageUrl = JSON.parse(r.image_urls || '[]'); }
+                catch (e) { r.imageUrl = []; }
+            });
             res.json(rows);
         }
     );
 });
 
-app.post('/api/assessments/submit', requireAuth, (req, res) => {
+// ============ 判断某行是否需要强制传图 ============
+function needImageForRow(row) {
+    let needImage = false, imageType = '';
+    if (row.type === 'cross') {
+        const c = parseFloat(row.compliance_rate) || 0;
+        const y = parseFloat(row.yield_rate) || 0;
+        if (c > 0 && c < 98) { needImage = true; imageType = '遵章率'; }
+        if (y > 0 && y < 98) { needImage = true; imageType = imageType ? imageType + '/礼让率' : '礼让率'; }
+    } else {
+        const y = parseFloat(row.yield_rate) || 0;
+        if (y > 0 && y < 98) { needImage = true; imageType = '礼让率'; }
+    }
+    return { needImage, imageType };
+}
+
+app.post('/api/assessments/submit', requireAuth, async (req, res) => {
     const username = req.session.user.username;
-    const todayStr = getTodayChina();
+    const todayStr = req.body.date || getTodayChina();
     const { assessments } = req.body;
 
     if (!assessments || !Array.isArray(assessments) || assessments.length === 0) {
         return res.status(400).json({ error: '请提供测评数据' });
     }
 
+    // 先做整体校验：任何一行 98% 以下且没图，直接拒绝
+    const errors = [];
+    assessments.forEach((row, idx) => {
+        if (!row.name || !row.name.trim()) return;
+        const urls = Array.isArray(row.imageUrl)
+            ? row.imageUrl
+            : (row.imageUrl ? [row.imageUrl] : []);
+        const { needImage, imageType } = needImageForRow(row);
+        if (needImage && urls.length === 0) {
+            const typeLabel = row.type === 'cross' ? '路口' : '路段';
+            errors.push(`第${idx + 1}行 ${typeLabel}「${row.name}」${imageType}低于98%，必须上传图片`);
+        }
+    });
+    if (errors.length > 0) {
+        return res.status(400).json({
+            success: false,
+            error: '强制传图校验未通过',
+            errors
+        });
+    }
+
     let successCount = 0;
     let errorCount = 0;
     const ip = getClientIp(req);
 
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
+    try {
+        for (const row of assessments) {
+            if (!row.name || row.name.trim() === '') continue;
+            if (row.evaluator && row.evaluator !== username) { errorCount++; continue; }
 
-        assessments.forEach((row) => {
-            if (!row.name || row.name.trim() === '') {
-                return;
-            }
+            const urls = Array.isArray(row.imageUrl)
+                ? row.imageUrl
+                : (row.imageUrl ? [row.imageUrl] : []);
+            const imageUrlsJson = JSON.stringify(urls);
+            const { imageType } = needImageForRow(row);
 
-            if (row.evaluator !== username) {
-                errorCount++;
-                return;
-            }
-
-            db.get(
+            const existing = await dbGet(
                 `SELECT id FROM assessments 
                  WHERE name = ? AND evaluator = ? AND assessment_date = ? AND type = ? AND row_index = ?`,
-                [row.name, username, todayStr, row.type, row.row_index || 0],
-                (err, existing) => {
-                    if (err) { errorCount++; return; }
-
-                    const sql = existing ? `
-                        UPDATE assessments SET
-                            paixu = ?, camera = ?, direction = ?,
-                            time_start = ?, time_end = ?,
-                            non_motor_count = ?, reverse_count = ?, red_light_count = ?,
-                            stop_line_count = ?, no_crosswalk_count = ?, other_count = ?,
-                            total = ?, compliance_rate = ?,
-                            right_turn_count = ?, no_yield_count = ?, yield_rate = ?,
-                            illegal_count = ?, remark = ?,
-                            non_motor_total = ?, wrong_lane_count = ?, compliance_rate_non = ?,
-                            parking_violation = ?, jaywalk_count = ?,
-                            crosswalk_total = ?, no_yield_cross = ?, compliance_rate_cross = ?,
-                            updated_at = datetime('now')
-                        WHERE id = ?
-                    ` : `
-                        INSERT INTO assessments (
-                            type, row_index, paixu, name, camera, direction,
-                            time_start, time_end,
-                            non_motor_count, reverse_count, red_light_count,
-                            stop_line_count, no_crosswalk_count, other_count,
-                            total, compliance_rate,
-                            right_turn_count, no_yield_count, yield_rate,
-                            illegal_count, evaluator, remark,
-                            non_motor_total, wrong_lane_count, compliance_rate_non,
-                            parking_violation, jaywalk_count,
-                            crosswalk_total, no_yield_cross, compliance_rate_cross,
-                            assessment_date
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `;
-
-                    const params = existing ? [
-                        row.paixu || '', row.camera || '', row.direction || '',
-                        row.time_start || '', row.time_end || '',
-                        row.non_motor_count || '', row.reverse_count || '', row.red_light_count || '',
-                        row.stop_line_count || '', row.no_crosswalk_count || '', row.other_count || '',
-                        row.total || '', row.compliance_rate || '',
-                        row.right_turn_count || '', row.no_yield_count || '', row.yield_rate || '',
-                        row.illegal_count || '', row.remark || '',
-                        row.non_motor_total || '', row.wrong_lane_count || '', row.compliance_rate_non || '',
-                        row.parking_violation || '', row.jaywalk_count || '',
-                        row.crosswalk_total || '', row.no_yield_cross || '', row.compliance_rate_cross || '',
-                        existing.id
-                    ] : [
-                        row.type || 'cross', row.row_index || 0, row.paixu || '', row.name || '',
-                        row.camera || '', row.direction || '',
-                        row.time_start || '', row.time_end || '',
-                        row.non_motor_count || '', row.reverse_count || '', row.red_light_count || '',
-                        row.stop_line_count || '', row.no_crosswalk_count || '', row.other_count || '',
-                        row.total || '', row.compliance_rate || '',
-                        row.right_turn_count || '', row.no_yield_count || '', row.yield_rate || '',
-                        row.illegal_count || '', username, row.remark || '',
-                        row.non_motor_total || '', row.wrong_lane_count || '', row.compliance_rate_non || '',
-                        row.parking_violation || '', row.jaywalk_count || '',
-                        row.crosswalk_total || '', row.no_yield_cross || '', row.compliance_rate_cross || '',
-                        todayStr
-                    ];
-
-                    db.run(sql, params, function(err) {
-                        if (err) {
-                            console.error('提交失败:', err);
-                            errorCount++;
-                            return;
-                        }
-                        successCount++;
-                    });
-                }
+                [row.name, username, todayStr, row.type, row.row_index || 0]
             );
-        });
 
-        db.run('COMMIT', (err) => {
-            if (err) {
-                db.run('ROLLBACK');
-                console.error('提交事务失败:', err);
-                return res.status(500).json({ error: '提交失败' });
+            let assessmentId;
+            if (existing) {
+                await dbRun(`
+                    UPDATE assessments SET
+                        paixu = ?, camera = ?, direction = ?,
+                        time_start = ?, time_end = ?,
+                        non_motor_count = ?, reverse_count = ?, red_light_count = ?,
+                        stop_line_count = ?, no_crosswalk_count = ?, other_count = ?,
+                        total = ?, compliance_rate = ?,
+                        right_turn_count = ?, no_yield_count = ?, yield_rate = ?,
+                        illegal_count = ?, remark = ?,
+                        non_motor_total = ?, wrong_lane_count = ?, compliance_rate_non = ?,
+                        parking_violation = ?, jaywalk_count = ?,
+                        crosswalk_total = ?, no_yield_cross = ?, compliance_rate_cross = ?,
+                        image_urls = ?,
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                `, [
+                    row.paixu || '', row.camera || '', row.direction || '',
+                    row.time_start || '', row.time_end || '',
+                    row.non_motor_count || '', row.reverse_count || '', row.red_light_count || '',
+                    row.stop_line_count || '', row.no_crosswalk_count || '', row.other_count || '',
+                    row.total || '', row.compliance_rate || '',
+                    row.right_turn_count || '', row.no_yield_count || '', row.yield_rate || '',
+                    row.illegal_count || '', row.remark || '',
+                    row.non_motor_total || '', row.wrong_lane_count || '', row.compliance_rate_non || '',
+                    row.parking_violation || '', row.jaywalk_count || '',
+                    row.crosswalk_total || '', row.no_yield_cross || '', row.compliance_rate_cross || '',
+                    imageUrlsJson,
+                    existing.id
+                ]);
+                assessmentId = existing.id;
+            } else {
+                const result = await dbRun(`
+                    INSERT INTO assessments (
+                        type, row_index, paixu, name, camera, direction,
+                        time_start, time_end,
+                        non_motor_count, reverse_count, red_light_count,
+                        stop_line_count, no_crosswalk_count, other_count,
+                        total, compliance_rate,
+                        right_turn_count, no_yield_count, yield_rate,
+                        illegal_count, evaluator, remark,
+                        non_motor_total, wrong_lane_count, compliance_rate_non,
+                        parking_violation, jaywalk_count,
+                        crosswalk_total, no_yield_cross, compliance_rate_cross,
+                        image_urls,
+                        assessment_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    row.type || 'cross', row.row_index || 0, row.paixu || '', row.name || '',
+                    row.camera || '', row.direction || '',
+                    row.time_start || '', row.time_end || '',
+                    row.non_motor_count || '', row.reverse_count || '', row.red_light_count || '',
+                    row.stop_line_count || '', row.no_crosswalk_count || '', row.other_count || '',
+                    row.total || '', row.compliance_rate || '',
+                    row.right_turn_count || '', row.no_yield_count || '', row.yield_rate || '',
+                    row.illegal_count || '', username, row.remark || '',
+                    row.non_motor_total || '', row.wrong_lane_count || '', row.compliance_rate_non || '',
+                    row.parking_violation || '', row.jaywalk_count || '',
+                    row.crosswalk_total || '', row.no_yield_cross || '', row.compliance_rate_cross || '',
+                    imageUrlsJson,
+                    todayStr
+                ]);
+                assessmentId = result.lastID;
             }
-            logOperation(username, '提交测评', `成功 ${successCount} 行，失败 ${errorCount} 行`, ip);
-            res.json({
-                success: true,
-                message: `提交完成: 成功 ${successCount} 行, 失败 ${errorCount} 行`,
-                successCount,
-                errorCount
-            });
-        });
-    });
-});
 
+            // 写入图片明细表（先删旧记录，再插新记录）
+            await dbRun('DELETE FROM assessment_images WHERE assessment_id = ?', [assessmentId]);
+            for (const u of urls) {
+                if (!u) continue;
+                // 存相对路径
+                const rel = String(u).replace(/^https?:\/\/[^/]+/, '');
+                await dbRun(
+                    `INSERT INTO assessment_images
+                     (assessment_id, resource_name, evaluator, assessment_date, image_type, image_url)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [assessmentId, row.name, username, todayStr, imageType || '', rel]
+                );
+            }
+
+            successCount++;
+        }
+
+        logOperation(username, '提交测评', `成功 ${successCount} 行，失败 ${errorCount} 行`, ip);
+        res.json({
+            success: true,
+            message: `提交完成: 成功 ${successCount} 行, 失败 ${errorCount} 行`,
+            successCount,
+            errorCount
+        });
+    } catch (e) {
+        console.error('提交失败:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
 // ============ 管理员汇总 ============
 app.get('/api/admin/all-assessments', requireAuth, (req, res) => {
     if (req.session.user.role !== 'admin') {
@@ -923,10 +947,15 @@ app.get('/api/admin/all-assessments', requireAuth, (req, res) => {
             console.error('查询汇总数据失败:', err);
             return res.status(500).json({ error: err.message });
         }
+        rows.forEach(r => {
+            try { r.image_urls = JSON.parse(r.image_urls || '[]'); }
+            catch (e) { r.image_urls = []; }
+        });
         res.json(rows);
     });
 });
 
+// ============ 导出测评数据（JSON，供前端生成 XLSX） ============
 app.get('/api/admin/export-assessments', requireAuth, (req, res) => {
     if (req.session.user.role !== 'admin') {
         return res.status(403).json({ error: '需要管理员权限' });
@@ -964,6 +993,114 @@ app.get('/api/admin/export-assessments', requireAuth, (req, res) => {
     });
 });
 
+// ============ 导出抽取记录（JSON） ============
+app.get('/api/admin/export-draw-records', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: '需要管理员权限' });
+    }
+
+    const { weekKey, drawDate } = req.query;
+    let sql = `
+        SELECT dr.*, r.id as resource_id, r.name, r.type, r.type_label, r.area, r.camera
+        FROM draw_records dr
+        JOIN resources r ON dr.resource_id = r.id
+        WHERE 1=1
+    `;
+    let params = [];
+
+    if (weekKey) {
+        sql += ` AND dr.week_key = ?`;
+        params.push(weekKey);
+    }
+    if (drawDate) {
+        sql += ` AND dr.draw_date = ?`;
+        params.push(drawDate);
+    }
+    sql += ` ORDER BY dr.draw_date ASC, r.type DESC`;
+
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+// ============ 按天导出：数据 + 图片打包 zip ============
+app.get('/api/admin/export-with-images', requireAuth, (req, res) => {
+    if (req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: '需要管理员权限' });
+    }
+    const { date } = req.query;
+    if (!date) return res.status(400).json({ error: '请提供日期 date=YYYY-MM-DD' });
+
+    db.all('SELECT * FROM assessments WHERE assessment_date = ? ORDER BY type DESC, row_index',
+        [date], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            db.all('SELECT * FROM assessment_images WHERE assessment_date = ?',
+                [date], (err2, imgs) => {
+                    if (err2) return res.status(500).json({ error: err2.message });
+
+                    res.setHeader('Content-Type', 'application/zip');
+                    res.setHeader('Content-Disposition', `attachment; filename="export_${date}.zip"`);
+
+                    const archive = archiver('zip', { zlib: { level: 9 } });
+                    archive.on('error', e => {
+                        console.error('打包失败:', e);
+                        try { res.status(500).end(); } catch (_) {}
+                    });
+                    archive.pipe(res);
+
+                    // 1. 数据 XLSX
+                    const dataForSheet = rows.map(r => {
+                        let urls = [];
+                        try { urls = JSON.parse(r.image_urls || '[]'); } catch (_) {}
+                        return {
+                            '类型': r.type === 'cross' ? '路口' : '路段',
+                            '班次': r.paixu || '',
+                            '测评点位': r.name || '',
+                            '摄像头位置': r.camera || '',
+                            '路口方向': r.direction || '',
+                            '开始时间': r.time_start || '',
+                            '结束时间': r.time_end || '',
+                            '非机动车行人数': r.non_motor_count || '',
+                            '逆行': r.reverse_count || '',
+                            '闯红灯': r.red_light_count || '',
+                            '越线停车': r.stop_line_count || '',
+                            '行人不走斑马线': r.no_crosswalk_count || '',
+                            '其他': r.other_count || '',
+                            '合计': r.total || '',
+                            '非机动车行人遵章率': r.compliance_rate || '',
+                            '右转弯机动车数量': r.right_turn_count || '',
+                            '未礼让数量': r.no_yield_count || '',
+                            '礼让率': r.yield_rate || '',
+                            '路口违法车辆数': r.illegal_count || '',
+                            '测评人': r.evaluator || '',
+                            '测评日期': r.assessment_date || '',
+                            '备注': r.remark || '',
+                            '图片文件': urls.map(u => String(u).split('/').pop()).join(' | ')
+                        };
+                    });
+                    const ws = XLSX.utils.json_to_sheet(dataForSheet);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, '测评数据');
+                    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+                    archive.append(buf, { name: `测评数据_${date}.xlsx` });
+
+                    // 2. 图片
+                    imgs.forEach(img => {
+                        const rel = String(img.image_url || '').replace(/^\//, '');
+                        const filePath = path.join(__dirname, 'public', rel);
+                        if (fs.existsSync(filePath)) {
+                            archive.file(filePath, { name: `图片/${path.basename(filePath)}` });
+                        }
+                    });
+
+                    archive.finalize();
+                });
+        });
+});
+
+// ============ 操作日志 ============
 app.get('/api/logs', requireAuth, (req, res) => {
     if (req.session.user.role !== 'admin') {
         return res.status(403).json({ error: '需要管理员权限' });
@@ -984,29 +1121,22 @@ app.get('/health', (req, res) => {
 });
 
 // ============ 图片上传 ============
-const multer = require('multer');
-const fs = require('fs');
-
-// 确保上传目录存在
 const uploadDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// 配置 multer 存储
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
-        // 生成唯一文件名：时间戳_随机数_原始文件名
         const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
+        const ext = path.extname(file.originalname) || '.jpg';
         cb(null, uniqueSuffix + ext);
     }
 });
 
-// 文件过滤：只允许图片
 const fileFilter = (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
         cb(null, true);
@@ -1015,25 +1145,35 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-const upload = multer({ 
+const upload = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: fileFilter
 });
 
-// 图片上传接口
+// 图片上传接口：按规则重命名
 app.post('/api/upload-image', requireAuth, upload.single('image'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: '请选择图片' });
+    if (!req.file) return res.status(400).json({ error: '请选择图片' });
+
+    const { resourceName = '', date = '', dataType = '' } = req.body;
+    const safe = s => String(s).replace(/[\\/:*?"<>|\s]/g, '_');
+    const ext = path.extname(req.file.filename) || '.jpg';
+    const newName = `${safe(req.session.user.username)}_${safe(date)}_${safe(resourceName)}_${safe(dataType)}不达标${ext}`;
+    const newPath = path.join(uploadDir, newName);
+
+    try {
+        if (fs.existsSync(newPath)) {
+            // 避免重名覆盖：加时间戳
+            const alt = `${safe(req.session.user.username)}_${safe(date)}_${safe(resourceName)}_${safe(dataType)}不达标_${Date.now()}${ext}`;
+            fs.renameSync(req.file.path, path.join(uploadDir, alt));
+            return res.json({ success: true, url: '/uploads/' + alt, filename: alt });
+        }
+        fs.renameSync(req.file.path, newPath);
+        res.json({ success: true, url: '/uploads/' + newName, filename: newName });
+    } catch (e) {
+        console.error('重命名失败:', e);
+        res.json({ success: true, url: '/uploads/' + req.file.filename, filename: req.file.filename });
     }
-    
-    // 返回图片访问路径
-    const imageUrl = '/uploads/' + req.file.filename;
-    res.json({ 
-        success: true, 
-        url: imageUrl,
-        filename: req.file.filename
-    });
 });
 
 // 提供静态文件访问（uploads目录）
