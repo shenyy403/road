@@ -49,7 +49,7 @@ db.serialize(() => {
     )
   `);
 
-  // ===== 抽取记录表（增加 assigned_to 字段） =====
+  // ===== 抽取记录表 =====
   db.run(`
     CREATE TABLE IF NOT EXISTS draw_records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,6 +120,55 @@ db.serialize(() => {
       UNIQUE(username, week_key)
     )
   `);
+
+  // ===== 轮次配置表（管理员选日期） =====
+  db.run(`
+    CREATE TABLE IF NOT EXISTS draw_rounds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      round_key TEXT UNIQUE NOT NULL,
+      plan_key TEXT NOT NULL,
+      dates TEXT NOT NULL,
+      created_by TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ===== 测评图片表 =====
+  db.run(`
+    CREATE TABLE IF NOT EXISTS assessment_images (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      assessment_id INTEGER,
+      resource_name TEXT,
+      evaluator TEXT NOT NULL,
+      assessment_date TEXT NOT NULL,
+      image_type TEXT,
+      image_url TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ===== 自定义方案表（管理员勾选资源） =====
+  db.run(`
+    CREATE TABLE IF NOT EXISTS custom_plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_name TEXT NOT NULL,
+      resource_ids TEXT NOT NULL,
+      created_by TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ===== 给 assessments 加 image_urls 字段（安全 ALTER） =====
+  db.all("PRAGMA table_info(assessments)", (err, cols) => {
+    if (err) return console.error(err);
+    const hasImageUrls = cols.some(c => c.name === 'image_urls');
+    if (!hasImageUrls) {
+      db.run("ALTER TABLE assessments ADD COLUMN image_urls TEXT DEFAULT '[]'", (e) => {
+        if (e) console.error('加 image_urls 失败:', e);
+        else console.log('✅ assessments 已添加 image_urls 字段');
+      });
+    }
+  });
 
   // ===== 创建用户 =====
   const allUsers = [
